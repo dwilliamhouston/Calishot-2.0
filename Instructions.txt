@@ -12,7 +12,7 @@ pip install datasette-pretty-json
 
 Step 2 - Get code from Github https://github.com/dwilliamhouston/ShodanTest
 
-Step 3 - Update SHODAN_API_KEY = "sEsxRpsOrBGJANgG1q6qL46xv153NrSV" to your own SHODAN API KEY in functions.py
+Step 3 - Update SHODAN_API_KEY = "Enter your own Shodan API Key here" to your own SHODAN API KEY in functions.py
 
 Step 4 - Execute from command line: pip -r install requirements.txt
 
