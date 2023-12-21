@@ -1,0 +1,12 @@
+{
+    "databases": {
+      "index": {
+        "tables": {
+            "summary": {
+                "sort": "title",
+                "searchmode": "raw"
+            }
+        }
+      }
+    }
+  }
