@@ -12,7 +12,9 @@ pip install datasette-pretty-json
 
 Step 2 - Get code from Github https://github.com/dwilliamhouston/ShodanTest
 
-Step 3 - Execute from command line:
+Step 3 - Update SHODAN_API_KEY = "sEsxRpsOrBGJANgG1q6qL46xv153NrSV" to your own SHODAN API KEY in functions.py
+
+Step 4 - Execute from command line:
 datasette serve index-non-eng.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
 
-Step 3 - Open your browser to http://localhost:8001/ and check the result
+Step 5 - Open your browser to http://localhost:8001/ and check the result
