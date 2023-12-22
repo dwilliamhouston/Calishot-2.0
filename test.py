@@ -1,13 +1,8 @@
-import requests
-import sys
-import sqlite3
-import csv
-import pathlib
-import jq
-import json
-import os
-import subprocess
-import shodan
+####################
+# Main Application #
+# Python3 test.py  #
+####################
+
 from functions import import_urls_from_file, check_calibre_list, index_site_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_list, check_calibre_site, build_index, index_to_json, diff, calibre_by_country, book_search, output_online_db
 
 #####################
@@ -108,6 +103,3 @@ if run_get_stats:
 if run_index_to_json:
     print ("Running index_to_json...")
     index_to_json()
-
-
-

@@ -2,7 +2,6 @@ import requests
 from pathlib import Path
 from urllib.parse import *
 import uuid
-from sqlite_utils import Database
 import datetime
 import gevent
 from gevent import monkey
@@ -24,24 +23,16 @@ import humanize
 from langid.langid import LanguageIdentifier, model
 import iso639
 import time
-import json
 import unidecode
-
 from requests.adapters import HTTPAdapter
-import urllib.parse
 import urllib3
-from pathlib import Path
-import uuid
-from sqlite_utils import Database
-
-import gevent
 from gevent import monkey
 from gevent import Timeout
 from gevent.pool import Pool
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
-SHODAN_API_KEY = "Enter SHODAN API KEY here from your Shodan Account"
+SHODAN_API_KEY = "sEsxRpsOrBGJANgG1q6qL46xv153NrSV"
 global api
 api = shodan.Shodan(SHODAN_API_KEY)
 
