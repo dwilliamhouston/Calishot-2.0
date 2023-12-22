@@ -3,9 +3,10 @@ Application to search Shodan for Calibre Web sites that and pull all books into 
 This code is based on code created by Krazybug - https://github.com/Krazybug/calishot
 
 Instructions
-Step 1 - Setup new python environemnt and install datasette. 
-python -m venv shodantest
 
+Step 1 - Setup new python environemnt and install datasette. 
+
+python -m venv shodantest
 . ./calishot/bin/activate
 pip install datasette
 pip install datasette-json-html
