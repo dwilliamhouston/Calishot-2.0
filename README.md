@@ -28,4 +28,5 @@ Step 7 - Open your browser to http://localhost:8001/ and check the result
 If using Docker
 
 Step 1 - docker run -p 5001:5000 dwilliamhouston/shodantest:latest datasette -p 5000 -h 0.0.0.0 /app/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
+
 Step 2 - open the browser to http://localhost:5001 or http:<website>:5001
