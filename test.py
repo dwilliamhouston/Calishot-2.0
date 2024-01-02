@@ -3,7 +3,7 @@
 # Python3 test.py  #
 ####################
 
-from functions import import_urls_from_file, check_calibre_list, index_site_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_list, check_calibre_site, build_index, index_to_json, diff, calibre_by_country, book_search, output_online_db
+from functions import import_urls_from_file, check_calibre_list, index_site_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_list, check_calibre_site, build_index_eng, index_to_json, diff, calibre_by_country, book_search, output_online_db, build_index_noteng
 
 #####################
 # Flags for testing #
@@ -14,7 +14,8 @@ run_check_calibre_list = True
 run_output_online_db = True
 run_index_site_list = True
 run_index_site_list_seq = True
-run_build_index = True
+run_build_index_eng = True
+run_build_index_noteng = True
 run_get_stats = True
 run_index_to_json = True
 
@@ -36,7 +37,7 @@ if run_search_by_country:
 ##############################################
 # Call book_search Function for each Country #
 ##############################################
-#run_book_search = False
+run_book_search = False
 if run_book_search:
     print ("Running run_book_search...")
     book_search('AU')
@@ -51,7 +52,7 @@ if run_book_search:
 ####################################
 # Call check_calibre_list Function #
 ####################################
-#run_check_calibre_list = False
+run_check_calibre_list = False
 if run_check_calibre_list:
     print ("Running run_check_calibre_list...")
     check_calibre_list()
@@ -59,7 +60,7 @@ if run_check_calibre_list:
 ##################################
 # Call output_online_db Function #
 ##################################
-#run_output_online_db = False
+run_output_online_db = False
 if run_output_online_db:
     print ("Running output_online_db...")
     output_online_db()
@@ -67,7 +68,7 @@ if run_output_online_db:
 ##################################
 # Call index_site_list Function #
 ##################################
-#run_index_site_list = False
+run_index_site_list = False
 if run_index_site_list:
     print ("Running index_site_list...")
     index_site_list('online.txt')
@@ -75,18 +76,26 @@ if run_index_site_list:
 #####################################
 # Call index_site_list_seq Function #
 #####################################
-#run_index_site_list_seq = False
+run_index_site_list_seq = False
 if run_index_site_list_seq:
     print ("Running index_site_list_seq...")
     index_site_list_seq('online.txt')
 
 #############################
-# Call build_index Function #
+# Call build_index_eng Function #
 #############################
-#run_build_index = False
-if run_build_index:
-    print ("Running run_index_site_list...")
-    build_index()
+run_build_index_eng = False
+if run_build_index_eng:
+    print ("Running run_index_eng...")
+    build_index_eng()
+
+#############################
+# Call build_index_noteng Function #
+#############################
+#run_build_index_noteng = False
+if run_build_index_noteng:
+    print ("Running run_build_index_noteng...")
+    build_index_noteng()
 
 ###########################
 # Call get_stats Function #
