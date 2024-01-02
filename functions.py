@@ -26,9 +26,7 @@ import time
 import unidecode
 from requests.adapters import HTTPAdapter
 import urllib3
-from gevent import monkey
-from gevent import Timeout
-from gevent.pool import Pool
+
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
@@ -1308,9 +1306,9 @@ def get_img_url(db, book):
 
     return d_url
 
-##########################
-# Build Index - English  #
-##########################
+########################
+# Build Index English  #
+########################
 def build_index_eng (dir='.', english=True):
 
     dbs=[]
@@ -1410,9 +1408,9 @@ def build_index_eng (dir='.', english=True):
     index_t.populate_fts(["title", "authors", "series", "identifiers", "language", "tags", "publisher", "formats", "year"])
     print("fts done")
 
-##############################
-# Build Index - Not English  #
-##############################
+############################
+# Build Index Not English  #
+############################
 def build_index_noteng (dir='.', english=False):
 
     dbs=[]
@@ -1438,11 +1436,11 @@ def build_index_noteng (dir='.', english=False):
 
     for db in dbs:
         for i, ebook in enumerate(db["ebooks"].rows):
-            if english and (not ebook['language'] or ebook['language'] != "eng"):
+            #if english and (not ebook['language'] or ebook['language'] != "eng"):
+            if english and (not ebook['language']):
                 continue
-            elif not english and ebook['language'] == "eng":
+            elif not english:
                 continue
-            
             
             if ebook['authors']: 
                 ebook['authors']=formats=json.loads(ebook['authors'])
@@ -1511,7 +1509,6 @@ def build_index_noteng (dir='.', english=False):
     print("fts")
     index_t.populate_fts(["title", "authors", "series", "identifiers", "language", "tags", "publisher", "formats", "year"])
     print("fts done")
-
 
 ############################
 # Search books in Index.db #

@@ -6,9 +6,9 @@ Step 1 - Setup new python environemnt and install datasette.
 python -m venv shodantest
 
 . ./calishot/bin/activate
-pip3 install datasette
-pip3 install datasette-json-html
-pip3 install datasette-pretty-json
+pip install datasette
+pip install datasette-json-html
+pip install datasette-pretty-json
 
 Step 2 - Get code from Github https://github.com/dwilliamhouston/ShodanTest
 
@@ -19,14 +19,14 @@ Step 4 - Execute from command line: pip -r install requirements.txt
 Step 5 - Execute from command line python3 test.py
 
 Step 6 - Execute from command line:
-datasette serve index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
 
 Step 7 - Open your browser to http://localhost:8001/ and check the result
 
 ############
 Docker Build
 ############
-1. docker buildx build --platform linux/amd64,linux/arm64 -t dwilliamhouston/shodantest:latest --push .
-2. On server do docker pull dwilliamhouston/shodantest:latest
+1. docker build -t shodantest:latest .
+2. docker push dwilliamhouston/shodantest:latest
 3. docker run -p 5001:5000 dwilliamhouston/shodantest:latest datasette -p 5000 -h 0.0.0.0 /app/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
 4. open the browser to http://localhost:5001 or http:<website>:5001
+
