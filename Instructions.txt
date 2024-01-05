@@ -18,7 +18,7 @@ Step 4 - Execute from command line: pip -r install requirements.txt
 
 Step 5 - Execute from command line python3 test.py
 
-Step 6 - Execute from command line:
+Step 6 - Execute from command line:  datasette serve index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
 
 Step 7 - Open your browser to http://localhost:8001/ and check the result
 
