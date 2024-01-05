@@ -43,7 +43,17 @@ site_cursor = site_conn.cursor()
 # Setup Sites Database #
 ########################
 def init_sites_db(dir="."):
-    
+    """
+    Initializes the sites database.
+
+    Parameters:
+    - dir (str): The directory path where the database file will be created. Default is the current directory.
+
+    Returns:
+    - db (Database): The initialized database object.
+
+    """
+
     path = Path(dir) / "sites.db" 
 
     db = Database(path)
@@ -76,6 +86,20 @@ def init_sites_db(dir="."):
 # Save sites found into Sites Database #
 ########################################
 def save_site(db: Database, site):
+    """
+    Saves a site to the database.
+
+    Parameters:
+    - db (Database): The database object to save the site to.
+    - site (dict): The site to be saved.
+
+    This function saves a site to the specified database. If the site does not have a 'uuid' key, a new UUID will be generated and assigned to the site before saving it. The site is saved using the 'upsert' method of the database object, with the primary key set to 'uuid'.
+
+    Returns:
+    - None
+
+    """
+
     # # TODO: Check if the site is not alreday present
     # def save_sites(db, sites):
     #     db["sites"].insert_all(sites, alter=True,  batch_size=100)
@@ -89,6 +113,17 @@ def save_site(db: Database, site):
 # Validate Site and save #
 ##########################
 def check_and_save_site(db, site):
+        """
+        Check and save a site.
+
+        Args:
+            db (database): The database object.
+            site (str): The site to be checked and saved.
+
+        Returns:
+            None
+        """
+
         res= check_calibre_site(site)
         print(res)
         save_site(db, res)
@@ -100,6 +135,22 @@ def check_and_save_site(db, site):
 # Check Calibre Site #
 ######################
 def check_calibre_site(site):
+    """
+    Check the calibre site.
+
+    :param site: A dictionary containing information about the site.
+                 It should have the following keys:
+                 - "uuid" (str): The UUID of the site.
+                 - "url" (str): The URL of the site.
+    :return: A dictionary containing the result of the check.
+             It has the following keys:
+             - "uuid" (str): The UUID of the site.
+             - "last_check" (str): The timestamp of the last check.
+             - "status" (str): The status of the site, which can be "unauthorized", "down", "online", or "Unknown Error".
+             - "last_online" (str): The timestamp of the last online status if the site is online.
+             - "error" (int): The HTTP status code if there is an error.
+    """
+
     ret={}
     ret['uuid']=site["uuid"]
     now=str(datetime.datetime.now())
@@ -156,7 +207,16 @@ def check_calibre_site(site):
 # Get UUID from Site #
 ######################
 def get_site_uuid_from_url(db, url):
+    """
+    Retrieve the site UUID from a given URL.
 
+    Args:
+        db (Database): The database connection.
+        url (str): The URL to extract the site UUID from.
+
+    Returns:
+        tuple or None: The row from the 'sites' table if a match is found, None otherwise.
+    """
     site=urlparse(url)
     hostname=site.hostname
     site=site._replace(path='')
@@ -174,6 +234,18 @@ def get_site_uuid_from_url(db, url):
 # Get URL, hostname and Port #
 ##############################
 def map_site_from_url(url):
+    """
+    Generates a site map from a given URL.
+
+    Args:
+        url (str): The URL to generate the site map from.
+    
+    Returns:
+        dict: A dictionary containing the generated site map. The dictionary has the following keys:
+            - 'url' (str): The modified URL with the path removed.
+            - 'hostnames' (list): A list containing the hostname extracted from the URL.
+            - 'ports' (list): A list containing the port number extracted from the URL as a string.
+    """
     ret={}
 
     site=urlparse(url)
@@ -189,6 +261,16 @@ def map_site_from_url(url):
 # Import the URLS from the temp file and write to Database #
 ############################################################
 def import_urls_from_file(filepath, dir='.'):
+    """
+    Import URLs from a file and add them to a sites database.
+
+    Args:
+        filepath (str): The path to the file containing the URLs.
+        dir (str, optional): The directory where the sites database is located. Defaults to '.'.
+
+    Returns:
+        None
+    """
 
     #TODO skip malformed urls
     #TODO use cache instead
@@ -209,6 +291,18 @@ def import_urls_from_file(filepath, dir='.'):
 # Get list of libraries from site #
 ###################################
 def get_libs_from_site(site):
+    """
+    Retrieves libraries from a specified website.
+
+    Args:
+        site (str): The URL of the website to retrieve libraries from.
+
+    Returns:
+        list[str]: A list of libraries retrieved from the website.
+
+    Raises:
+        requests.RequestException: If there is an issue making the request to the website.
+    """
 
     server=site.rstrip('/')
     api=server+'/ajax/'
@@ -241,6 +335,15 @@ def get_libs_from_site(site):
 # Check the list of sites in file #
 ###################################
 def check_calibre_list(dir='.'):    
+    """
+    Generates a comment for the given function body in a markdown code block with the correct language syntax.
+
+    Parameters:
+        dir (str): The directory to search for the sites database. Defaults to the current directory.
+
+    Returns:
+        None
+    """
     db=init_sites_db(dir)
     sites=[]
     for row in db["sites"].rows:
@@ -255,6 +358,16 @@ def check_calibre_list(dir='.'):
 #################
 # example of a fts search sqlite-utils index.db "select * from summary_fts where summary_fts  match 'title:fre*'"
 def get_site_db(uuid, dir):
+        """
+        Retrieves the site database based on the given UUID and directory.
+
+        :param uuid: The UUID of the site.
+        :type uuid: int or str
+        :param dir: The directory where the site database is located.
+        :type dir: str
+        :return: The site database.
+        :rtype: Database
+        """
         f_uuid=str(uuid)+".db"
         print(f_uuid)
         path = Path(dir) / str(f_uuid) 
@@ -264,6 +377,18 @@ def get_site_db(uuid, dir):
 # Initialize Site Database #
 ############################
 def init_site_db(site, _uuid="", dir="."):
+    """
+    Initializes a site database.
+
+    Parameters:
+        site (str): The URL of the site.
+        _uuid (str, optional): The UUID for the database. Defaults to an empty string.
+        dir (str, optional): The directory where the database will be created. Defaults to ".".
+
+    Returns:
+        Database: The initialized database.
+
+    """
     
     if not _uuid:
         s_uuid=str(uuid.uuid4())
@@ -327,6 +452,17 @@ def init_site_db(site, _uuid="", dir="."):
 # Get Library URL from Database #
 #################################
 def get_format_url(db, book, format):
+    """
+    Generate the URL for a specific book format.
+
+    Args:
+        db (dict): The database containing the site information.
+        book (dict): The book information.
+        format (str): The desired book format.
+
+    Returns:
+        str: The URL for the specified book format.
+    """
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
     library=book['library']
     id_=str(book['id'])
@@ -338,6 +474,16 @@ def get_format_url(db, book, format):
 # Get Library Version Info #
 ############################
 def get_desc_url(db, book):
+    """
+    Generate the URL for the book description.
+
+    Parameters:
+        db (dict): The database containing the site information.
+        book (dict): The book object.
+
+    Returns:
+        str: The URL for the book description.
+    """
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -358,6 +504,16 @@ def get_desc_url(db, book):
 # Write book info to Database #
 ###############################
 def save_books_metadata_from_site(db, books):
+    """
+    Saves the metadata of books from a website into the database.
+
+    Parameters:
+    - db (dict): The database object.
+    - books (list): A list of dictionaries containing the metadata of the books.
+
+    Returns:
+    - None
+    """
     uuid = list(db['site'].rows)[0]["uuid"]
     # print(uuid)
     ebooks_t=db["ebooks"]
@@ -379,6 +535,15 @@ def load_metadata(dir, uuid):
 # Update Status when book details loaded #
 ##########################################
 def update_done_status(book):
+    """
+    Update the status of a book based on its source.
+
+    Args:
+        book (dict): The book object containing the source information.
+
+    Returns:
+        None: This function does not return anything.
+    """
     source=book['source']
     if source['status']!='ignored':
         if set(source['formats'].keys()) == set(book['formats']) & set(source['formats'].keys()):
@@ -390,6 +555,15 @@ def update_done_status(book):
 # Index the Site List Sequence #
 ################################
 def index_site_list_seq(file):
+    """
+    Reads a file line by line and calls the index_ebooks function on each line.
+
+    Parameters:
+        file (str): The path to the file to be read.
+
+    Returns:
+        None
+    """
     with open(file) as f:
         for s in f.readlines():
             # try: 
@@ -402,6 +576,15 @@ def index_site_list_seq(file):
 # Index Site List #
 ###################
 def index_site_list(file):
+    """
+    Indexes a list of sites in parallel using a pool of worker processes.
+
+    Args:
+        file (str): The path to the file containing the list of sites.
+
+    Returns:
+        None
+    """
     pool = Pool(40)
 
     with open(file) as f:
@@ -414,6 +597,15 @@ def index_site_list(file):
 # Index ebooks Exception #
 ##########################
 def index_ebooks_except(site):
+    """
+    Indexes ebooks for a given site, except when an error occurs.
+
+    Args:
+        site (str): The site to index ebooks for.
+
+    Returns:
+        None
+    """
     try:
         index_ebooks(site)
     except:
@@ -423,6 +615,21 @@ def index_ebooks_except(site):
 # Index Ebooks #
 ################
 def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+    """
+    Retrieves ebooks from a site and indexes them into a library.
+
+    Args:
+        site (str): The site from which to retrieve ebooks.
+        library (str, optional): The library in which to index the ebooks. Defaults to "".
+        start (int, optional): The starting index of ebooks to retrieve. Defaults to 0.
+        stop (int, optional): The ending index of ebooks to retrieve. Defaults to 0.
+        dir (str, optional): The directory in which to store the ebooks. Defaults to ".".
+        num (int, optional): The number of ebooks to retrieve. Defaults to 1000.
+        force_refresh (bool, optional): Whether to force a refresh of the ebooks. Defaults to False.
+
+    Returns:
+        None
+    """
 
     #TODO old calibres don't manage libraries.  /ajax/library-info endpoint doesn't exist. It would be better to manage calibre version directly 
 
@@ -444,6 +651,22 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
 # Index Ebooks from Library #
 #############################
 def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+    """
+    Index ebooks from a library on a site.
+
+    Args:
+        site (str): The site to index the library from.
+        _uuid (str, optional): The UUID of the library. Defaults to "".
+        library (str, optional): The library name. Defaults to "".
+        start (int, optional): The starting index for indexing. Defaults to 0.
+        stop (int, optional): The stopping index for indexing. Defaults to 0.
+        dir (str, optional): The directory to save the indexed ebooks. Defaults to ".".
+        num (int, optional): The number of ebooks to index at a time. Defaults to 1000.
+        force_refresh (bool, optional): Whether to force refresh the metadata. Defaults to False.
+
+    Returns:
+        None
+    """
     
     offset= 0 if not start else start-1
     num=min(1000, num)
@@ -696,6 +919,16 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 # Query EBooks in Database #
 ############################
 def query(query_str="", dir="."):
+    """
+    Generates a function comment for the given function body in a markdown code block with the correct language syntax.
+
+    Parameters:
+    - query_str (str): The query string to be used in the function.
+    - dir (str): The directory to search for files. Default is the current directory.
+
+    Returns:
+    - None
+    """
     dbs=[]
     for path in os.listdir(dir):
         db = Database(path)
@@ -716,6 +949,15 @@ def query(query_str="", dir="."):
 # Get Statistics #
 ##################
 def get_stats(dir="."):
+    """
+    Retrieves statistics about the ebooks in a given directory.
+
+    Parameters:
+    - dir (str): The directory path to search for ebooks. Defaults to the current directory.
+
+    Returns:
+    None
+    """
     dbs=[]
     size=0
     count=0
@@ -751,6 +993,16 @@ def get_stats(dir="."):
 # Get Temporary Site Database #
 ###############################
 def get_site_db(uuid, dir):
+        """
+        Generate a function comment for the given function body.
+
+        Args:
+            uuid (int): The unique identifier for the site database.
+            dir (str): The directory where the site database is located.
+
+        Returns:
+            Database: The site database corresponding to the given UUID.
+        """
         f_uuid=str(uuid)+".db"
         print(f_uuid)
         path = Path(dir) / str(f_uuid) 
@@ -760,6 +1012,17 @@ def get_site_db(uuid, dir):
 # Init Temporary Site Database #
 ################################
 def init_site_db(site, _uuid="", dir="."):
+    """
+    Initializes a site database.
+
+    Args:
+        site (str): The site URL.
+        _uuid (str, optional): The UUID for the database. Defaults to an empty string.
+        dir (str, optional): The directory where the database file will be created. Defaults to ".".
+
+    Returns:
+        Database: The initialized site database.
+    """
     
     if not _uuid:
         s_uuid=str(uuid.uuid4())
@@ -827,6 +1090,17 @@ def init_site_db(site, _uuid="", dir="."):
 # Format the Get URL #
 ######################
 def get_format_url(db, book, format):
+    """
+    Generates the URL for a specific format of a book.
+
+    Parameters:
+        db (dict): The database containing book information.
+        book (dict): The book for which to generate the URL.
+        format (str): The desired format of the book.
+
+    Returns:
+        str: The URL for the specified format of the book.
+    """
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
     library=book['library']
     id_=str(book['id'])
@@ -838,6 +1112,16 @@ def get_format_url(db, book, format):
 # Get Book Description #
 ########################
 def get_desc_url(db, book):
+    """
+    Retrieves the description URL for a given book from the database.
+
+    Parameters:
+        db (Database): The database object containing the book information.
+        book (dict): The book object containing the book details.
+
+    Returns:
+        str: The description URL for the given book.
+    """
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -858,6 +1142,16 @@ def get_desc_url(db, book):
 # Save Books Metadata to Database #
 ###################################
 def save_books_metadata_from_site(db, books):
+    """
+    Saves the metadata of books from a website into the database.
+
+    Args:
+        db (Database): The database object where the metadata will be saved.
+        books (List[dict]): A list of dictionaries representing the metadata of the books.
+
+    Returns:
+        None
+    """
     uuid = list(db['site'].rows)[0]["uuid"]
 
     # print(uuid)
@@ -878,11 +1172,33 @@ def save_books_metadata_from_site(db, books):
 # Load Metadata #
 #################
 def load_metadata(dir, uuid):
+    """
+    Load metadata from a directory using the specified UUID.
+
+    Args:
+        dir (str): The directory from which to load the metadata.
+        uuid (str): The UUID of the metadata to load.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     pass
 ######################
 # Update Done Status #
 ######################
 def update_done_status(book):
+    """
+    Updates the 'status' field of the given book's source based on the availability of formats.
+
+    Args:
+        book (dict): The book object containing the source and formats information.
+
+    Returns:
+        None
+    """
     source=book['source']
     if source['status']!='ignored':
         if set(source['formats'].keys()) == set(book['formats']) & set(source['formats'].keys()):
@@ -894,6 +1210,15 @@ def update_done_status(book):
 # Index Site List Sequence #
 ############################
 def index_site_list_seq(file):
+    """
+    Indexes a list of site sequences from a file.
+
+    Args:
+        file (str): The path to the file containing the site sequences.
+
+    Returns:
+        None
+    """
     with open(file) as f:
         for s in f.readlines():
             # try: 
@@ -906,6 +1231,15 @@ def index_site_list_seq(file):
 # Index Site List #
 ###################
 def index_site_list(file):
+    """
+    Indexes a list of sites from a given file.
+
+    Args:
+        file (str): The path to the file containing the list of sites.
+
+    Returns:
+        None
+    """
     pool = Pool(40)
 
     with open(file) as f:
@@ -918,6 +1252,14 @@ def index_site_list(file):
 # Index Ebooks Exception #
 ##########################
 def index_ebooks_except(site):
+    """
+    Indexes ebooks on the given site, excluding any errors that occur during indexing.
+
+    :param site: The site to index ebooks from.
+    :type site: str
+
+    :return: None
+    """
     try:
         index_ebooks(site)
     except:
@@ -927,6 +1269,21 @@ def index_ebooks_except(site):
 # Index Ebooks #
 ################
 def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+    """
+    Generates a function comment for the given function body.
+
+    Args:
+        site (str): The site to index ebooks from.
+        library (str, optional): The library to index ebooks from. Defaults to "".
+        start (int, optional): The starting index. Defaults to 0.
+        stop (int, optional): The stopping index. Defaults to 0.
+        dir (str, optional): The directory to save the indexed ebooks. Defaults to ".".
+        num (int, optional): The number of ebooks to index. Defaults to 1000.
+        force_refresh (bool, optional): Whether to force a refresh of the indexed ebooks. Defaults to False.
+    
+    Returns:
+        None
+    """
 
     #TODO old calibres don't manage libraries.  /ajax/library-info endpoint doesn't exist. It would be better to manage calibre version directly 
 
@@ -948,6 +1305,22 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
 # Index Ebooks from Library #
 #############################
 def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+    """
+    Indexes ebooks from a library on a specific site.
+    
+    Parameters:
+    - site: The URL of the site.
+    - _uuid: The UUID of the library (optional).
+    - library: The name of the library (optional).
+    - start: The starting index of the ebooks to index (optional).
+    - stop: The stopping index of the ebooks to index (optional).
+    - dir: The directory to save the indexed ebooks (optional).
+    - num: The maximum number of ebooks to index (optional).
+    - force_refresh: Whether to force a refresh of the indexed ebooks (optional).
+    
+    Returns:
+    None
+    """
     
     offset= 0 if not start else start-1
     num=min(1000, num)
@@ -1200,6 +1573,16 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 # Query Books in Database #
 ###########################
 def query(query_str="", dir="."):
+    """
+    This function takes in an optional query string and directory path and performs a query on a list of databases located in the specified directory.
+    
+    Parameters:
+        query_str (str): The query string to be used for searching the databases. Default is an empty string.
+        dir (str): The directory path where the databases are located. Default is the current directory.
+    
+    Returns:
+        None
+    """
     dbs=[]
     for path in os.listdir(dir):
         db = Database(path)
@@ -1219,6 +1602,15 @@ def query(query_str="", dir="."):
 # Get Stats on EBook Type #
 ###########################
 def get_stats(dir="."):
+    """
+    Retrieves statistics about the ebooks in the specified directory.
+
+    Parameters:
+        dir (str): The directory to search for ebooks. Defaults to the current directory.
+
+    Returns:
+        None
+    """
     dbs=[]
     size=0
     count=0
@@ -1254,6 +1646,15 @@ def get_stats(dir="."):
 # Initialize Index.db #
 #######################
 def init_index_db(dir="."):
+    """
+    Initializes an index database in the specified directory.
+    
+    Args:
+        dir (str): The directory where the index database should be created. Defaults to the current directory.
+        
+    Returns:
+        Database: The initialized index database.
+    """
     
     path = Path(dir) / "index.db" 
     
@@ -1289,6 +1690,16 @@ def init_index_db(dir="."):
 # Get Book Covers #
 ###################
 def get_img_url(db, book):
+    """
+    Generates the URL of an image based on the database and book information.
+
+    Parameters:
+        db (dict): The database containing the site information.
+        book (dict): The book information.
+
+    Returns:
+        str: The URL of the image.
+    """
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -1310,6 +1721,16 @@ def get_img_url(db, book):
 # Build Index English  #
 ########################
 def build_index_eng (dir='.', english=True):
+    """
+    Builds an index for English ebooks in the given directory.
+
+    Args:
+        dir (str): The directory to search for ebook databases. Defaults to the current directory.
+        english (bool): Flag to indicate whether to include only English ebooks in the index. Defaults to True.
+
+    Returns:
+        None
+    """
 
     dbs=[]
     for f in os.listdir(dir):
@@ -1334,114 +1755,11 @@ def build_index_eng (dir='.', english=True):
 
     for db in dbs:
         for i, ebook in enumerate(db["ebooks"].rows):
-            if english and (not ebook['language'] or ebook['language'] != "eng"):
-                continue
-            elif not english and ebook['language'] == "eng":
-                continue
-            
-            
-            if ebook['authors']: 
-                ebook['authors']=formats=json.loads(ebook['authors'])
-            # if ebook['series']:    
-            #     ebook['series']=formats=json.loads(ebook['series'])
-            if ebook['identifiers']:
-                ebook['identifiers']=formats=json.loads(ebook['identifiers'])
-            if ebook['tags']: 
-                ebook['tags']=formats=json.loads(ebook['tags'])
-            ebook['formats']=formats=json.loads(ebook['formats'])
-            ebook['links']=""
-            summary = {k: v for k, v in ebook.items() if k in ("uuid","title", "authors", "series", "language", "formats", "tags", "publisher", "identifiers")}
-            # summary = {k: v for k, v in ebook.items() if k in ("uuid","title", "authors", "series", "identifiers", "language", "tags", "publisher", "formats")}
-            summary['title']={'href': get_desc_url(db, ebook), 'label': ebook['title']}
+#            if english and (not ebook['language'] or ebook['language'] != "eng"):
+#                continue
+#            elif not english and ebook['language'] == "eng":
+#                continue
 
-            summary["cover"]= {"img_src": get_img_url(db, ebook), "width": 90}
-
-            formats=[]
-            for f in ebook['formats']:
-                formats.append({'href': get_format_url(db, ebook, f), 'label': f"{f} ({hsize(ebook[f])})"})
-            summary['links']=formats
-            
-            pubdate=ebook['pubdate'] 
-            summary['year']=pubdate[0:4] if pubdate else "" 
-            summaries.append(summary)
-            # print(summary)
-            count+=1
-            print (f"\r{count} - ebook handled: {ebook['uuid']}", end='')
-
-            if not count % batch_size:
-                # print()
-                # print(f"Saving summary by batch: {len(summaries)}")    
-                # print(summaries)
-                # index_t.upsert_all(summaries, batch_size=1000, pk='uuid')
-                # index_t.insert_all(summaries, batch_size=1000, pk='uuid')
-                try:
-                    index_t.insert_all(summaries, batch_size=batch_size)
-                except Exception as e:
-                    # dump = [(s['uuid'],s['links']) for s in summaries]
-                    # print(dump)
-                    print()
-                    print("UUID collisions. Probalbly a site duplicate")
-                    print(e)
-                    print()
-
-                    # index_t.upsert_all(summaries, batch_size=batch_size, pk='uuid')
-                    # TODO Some ebooks could be missed. We need to compute the batch list, insert new ebooks and update the site index
-
-                # print("Saved")
-                # print()
-                summaries=[]
-
-    # print()
-    # print("saving summary")    
-    # index_t.upsert_all(summaries, batch_size=1000, pk='uuid')
-    # index_t.insert_all(summaries, batch_size=1000, pk='uuid')
-    try:
-        index_t.insert_all(summaries, batch_size=batch_size)
-    except:
-        print("sqlite3.IntegrityError: UNIQUE constraint failed: summary.uuid")
-
-    # print("summary done")
-    # print()
-    
-    print()
-    print("fts")
-    index_t.populate_fts(["title", "authors", "series", "identifiers", "language", "tags", "publisher", "formats", "year"])
-    print("fts done")
-
-############################
-# Build Index Not English  #
-############################
-def build_index_noteng (dir='.', english=False):
-
-    dbs=[]
-    for f in os.listdir(dir):
-        if not f.endswith(".db"):
-            continue
-        if f in ("index.db", "sites.db"):
-            continue
-        p = Path(dir) / f 
-        print(f)
-        try:
-            db = Database(p.resolve())
-        except:
-            print ("Pb with:", f)
-        dbs.append(db)
-    
-    db_index = init_index_db(dir=dir)
-    index_t=db_index["summary"]
-
-    batch_size=10000
-    count=0
-    summaries=[]
-
-    for db in dbs:
-        for i, ebook in enumerate(db["ebooks"].rows):
-            #if english and (not ebook['language'] or ebook['language'] != "eng"):
-            if english and (not ebook['language']):
-                continue
-            elif not english:
-                continue
-            
             if ebook['authors']: 
                 ebook['authors']=formats=json.loads(ebook['authors'])
             # if ebook['series']:    
@@ -1514,6 +1832,17 @@ def build_index_noteng (dir='.', english=False):
 # Search books in Index.db #
 ############################
 def search(query_str, dir=".", links_only=False):
+    """
+    Search for ebooks in the specified directory using a query string.
+    
+    Args:
+        query_str (str): The query string to search for.
+        dir (str, optional): The directory to search in. Defaults to ".".
+        links_only (bool, optional): Whether to only print the download links. Defaults to False.
+    
+    Returns:
+        None
+    """
     path = Path(dir) / "index.db" 
     db_index = Database(path)
     # table=db_index["summary"]
@@ -1562,6 +1891,15 @@ def search(query_str, dir=".", links_only=False):
 #########################
 # https://stackoverflow.com/questions/26692284/how-to-prevent-brokenpipeerror-when-doing-a-flush-in-python
 def index_to_json(dir='.'):
+    """
+    Converts the index database to a JSON file.
+
+    Args:
+        dir (str): The directory containing the index database file. Defaults to the current directory.
+
+    Returns:
+        None
+    """
     path = Path(dir) / "index.db" 
     db = Database(path)
 
@@ -1596,6 +1934,18 @@ def index_to_json(dir='.'):
 # Initialize Diff.db #
 ######################
 def init_diff_db(dir="."):
+    """
+    Initializes a new database for storing diff information.
+
+    Args:
+        dir (str): The directory where the database file should be created. Defaults to the current directory.
+
+    Returns:
+        Database: The initialized diff database.
+
+    Raises:
+        None
+    """
     
     path = Path(dir) / "diff.db" 
     
@@ -1628,6 +1978,13 @@ def init_diff_db(dir="."):
 # Difference Function #
 #######################
 def diff(old, new, dir=".", ):
+    """
+    Generate the function comment for the given function body in a markdown code block with the correct language syntax.
+
+    :param old: The old value.
+    :param new: The new value.
+    :param dir: The directory where the files are located. Defaults to ".".
+    """
     path = Path(dir) / old 
     db_old = Database(path)
 
@@ -1661,6 +2018,15 @@ def diff(old, new, dir=".", ):
 # Query Calibre by Country #
 ############################
 def calibre_by_country(country):
+    """
+    Generates a list of web-Calibre servers by country and saves them to a file.
+
+    Args:
+        country (str): The country for which to generate the list of web-Calibre servers.
+
+    Returns:
+        None
+    """
     page = 1
     apiquery = 'calibre http.status:"200" country:"' + country + '"'+ ',limit=50'
     try:
@@ -1690,6 +2056,15 @@ def calibre_by_country(country):
 # And write each server to the server table #
 #############################################
 def book_search(country):
+    """
+    Function to search for books based on the country.
+
+    Args:
+        country (str): The name of the country to search for books.
+
+    Returns:
+        None
+    """
     import_urls_from_file(country + '.txt')
     return()
 
@@ -1698,6 +2073,15 @@ def book_search(country):
 # marked as online in database.            #
 ############################################
 def output_online_db():
+    """
+    Retrieves the URLs of all online sites from the database and saves them to a file.
+
+    Parameters:
+    None
+
+    Returns:
+    None
+    """
     script = "select url from sites where status='online'"
     df = pd.read_sql(script, site_conn)
     df.to_csv('online.txt', header=False, index=False)
