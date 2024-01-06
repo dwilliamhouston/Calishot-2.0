@@ -31,7 +31,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
-SHODAN_API_KEY = "sEsxRpsOrBGJANgG1q6qL46xv153NrSV"
+SHODAN_API_KEY = "<Put Shodan API Key here>"
 global api
 api = shodan.Shodan(SHODAN_API_KEY)
 
