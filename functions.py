@@ -38,7 +38,6 @@ api = shodan.Shodan(SHODAN_API_KEY)
 global site_conn
 site_conn = sqlite3.connect("sites.db")
 site_cursor = site_conn.cursor()
-# monkey.patch_socket()
 
 ########################
 # Setup Sites Database #
