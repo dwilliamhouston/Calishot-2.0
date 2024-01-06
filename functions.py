@@ -294,7 +294,7 @@ def import_urls_from_file(filepath, dir='.'):
 
     #TODO skip malformed urls
     #TODO use cache instead
-    loggin.info("***Importing URLs from file Function*** %s", filepath)
+    logging.info("***Importing URLs from file Function*** %s", filepath)
     db=init_sites_db(dir)
 
     with open(filepath) as f:
@@ -348,7 +348,7 @@ def get_libs_from_site(site):
         logging.error("Unable to open site: %s", url)
         # return
     except Exception as e:
-        loggin.error("Other issue: %s", e)
+        logging.error("Other issue: %s", e)
         print ("Other issue:", e)
         return
         # pass
@@ -458,7 +458,7 @@ def init_site_db(site, _uuid="", dir="."):
         "desc": str,
         "identifiers": str,
         "tags": str,
-        "publisher": str,
+        "publisher": str, #Index Ebooks From Library Function
         "pubdate": str,
         "last_modified": str,
         "timestamp": str,
@@ -1060,7 +1060,7 @@ def get_site_db(uuid, dir):
         Returns:
             Database: The site database corresponding to the given UUID.
         """
-        loggin.info("*** get_site_db ***")
+        logging.info("*** get_site_db ***")
         f_uuid=str(uuid)+".db"
         print(f_uuid)
         logging.info(f_uuid)
