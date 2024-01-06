@@ -27,6 +27,7 @@ import unidecode
 from requests.adapters import HTTPAdapter
 import urllib3
 import logging
+logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.DEBUG)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
