@@ -26,7 +26,7 @@ import time
 import unidecode
 from requests.adapters import HTTPAdapter
 import urllib3
-
+import logging
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
@@ -53,7 +53,7 @@ def init_sites_db(dir="."):
     - db (Database): The initialized database object.
 
     """
-
+    logging.info("****Setup Sites Database Function****")
     path = Path(dir) / "sites.db" 
 
     db = Database(path)
@@ -99,6 +99,8 @@ def save_site(db: Database, site):
     - None
 
     """
+    logging.info("****Save Site Function****")
+
 
     # # TODO: Check if the site is not alreday present
     # def save_sites(db, sites):
@@ -106,6 +108,7 @@ def save_site(db: Database, site):
     if not 'uuid' in site: 
         site['uuid']=str(uuid.uuid4())    
     print(site)
+    logging.info("Site: %s", site)
     db["sites"].upsert(site, pk='uuid')
 
 
@@ -123,9 +126,11 @@ def check_and_save_site(db, site):
         Returns:
             None
         """
+        logging.info("****Check and Save Function****")
 
         res= check_calibre_site(site)
         print(res)
+        logging.info("Result: %s", res)
         save_site(db, res)
 
 # import pysnooper
@@ -151,6 +156,7 @@ def check_calibre_site(site):
              - "error" (int): The HTTP status code if there is an error.
     """
 
+    logging.info("****Check Calibre Site Function****")
     ret={}
     ret['uuid']=site["uuid"]
     now=str(datetime.datetime.now())
@@ -162,38 +168,47 @@ def check_calibre_site(site):
     url=api+'search'+library+'?num=0'
     print()
     print("Getting ebooks count:", site['url'])
+    logging.info("Getting ebooks count: %s", site['url'])
     print(url)
+    logging.info("URL: %s", url)
     
     try:
         r=requests.get(url, verify=False, timeout=(timeout, 30))
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
         r.status_code
+        logging.error("HTTP error: %s", r.status_code)
         ret['error']=r.status_code
         if (r.status_code == 401):
             ret['status']="unauthorized"
+            logging.error("HTTP unauthorized")
         else:
             ret['status']="down"
+            logging.error("HTTP down")
         return ret
     except requests.RequestException as e: 
         print("Unable to open site:", url)
+        logging.error("Unable to open site: %s", url)
         # print (getattr(e, 'message', repr(e)))
         print (e)
         ret['status']="down"
         return ret
     except Exception as e:
         print ("Other issue:", e)
+        logging.error("Other issue: %s", e)
         ret['status']='Unknown Error'
         print (e)
         return ret
     except :
         print("Wazza !!!!")
+        logging.error("Critical Error: %s", e)
         ret['status']='Critical Error'
         print (e)
         return ret
 
     try: 
         print("Total count=",r.json()["total_num"])
+        logging.info("Total count: %s", r.json()["total_num"])
     except:
         pass
 
@@ -217,6 +232,7 @@ def get_site_uuid_from_url(db, url):
     Returns:
         tuple or None: The row from the 'sites' table if a match is found, None otherwise.
     """
+    logging.info("****Get Site UUID from url Function****")
     site=urlparse(url)
     hostname=site.hostname
     site=site._replace(path='')
@@ -246,14 +262,18 @@ def map_site_from_url(url):
             - 'hostnames' (list): A list containing the hostname extracted from the URL.
             - 'ports' (list): A list containing the port number extracted from the URL as a string.
     """
+    logging.info("****Map Site from URL Function****")
     ret={}
 
     site=urlparse(url)
 
     print(site)
     site=site._replace(path='')
+    logging.info("URL: %s", url)
     ret['url']=urlunparse(site)
-    ret['hostnames']=[site.hostname] 
+    logging.info("Hostnames: %s", site.hostname)
+    ret['hostnames']=[site.hostname]
+    logging.info("Port: %s", site.port)
     ret['ports']=[str(site.port)]
     return ret
 
@@ -274,7 +294,7 @@ def import_urls_from_file(filepath, dir='.'):
 
     #TODO skip malformed urls
     #TODO use cache instead
-
+    loggin.info("***Importing URLs from file Function*** %s", filepath)
     db=init_sites_db(dir)
 
     with open(filepath) as f:
@@ -282,9 +302,11 @@ def import_urls_from_file(filepath, dir='.'):
             url=url.rstrip()
             # url='http://'+url
             if get_site_uuid_from_url(db, url):
+                logging.info("'%s' already present", url)
                 print(f"'{url}'' already present")
                 continue
             print(f"'{url}'' added")
+            logging.info("'%s' added", url)
             save_site(db, map_site_from_url(url))
     
 ###################################
@@ -303,17 +325,19 @@ def get_libs_from_site(site):
     Raises:
         requests.RequestException: If there is an issue making the request to the website.
     """
-
+    logging.info("****Get Libs from site Function****")
     server=site.rstrip('/')
     api=server+'/ajax/'
     timeout=30
     
     print()
     print("Server:", server)
+    logging.info("Server: %s", server)
     url=api+'library-info'
 
     print()
     print("Getting libraries from", server)
+    logging.info("Getting libraries from: %s", server)
     # print(url)
 
     try:
@@ -321,13 +345,16 @@ def get_libs_from_site(site):
         r.raise_for_status()
     except requests.RequestException as e: 
         print("Unable to open site:", url)
+        logging.error("Unable to open site: %s", url)
         # return
     except Exception as e:
+        loggin.error("Other issue: %s", e)
         print ("Other issue:", e)
         return
         # pass
 
     libraries = r.json()["library_map"].keys()
+    logging.info("Libraries: %s", libraries)
     print("Libraries:", ", ".join(libraries))
     return libraries
 
@@ -344,9 +371,11 @@ def check_calibre_list(dir='.'):
     Returns:
         None
     """
+    logging.info("****Check Calibre List Function****")
     db=init_sites_db(dir)
     sites=[]
     for row in db["sites"].rows:
+        logging.info("Queining: %s", row['url'])
         print(f"Queueing:{row['url']}")
         sites.append(row)
     print(sites)
@@ -368,7 +397,9 @@ def get_site_db(uuid, dir):
         :return: The site database.
         :rtype: Database
         """
+        logging.info("****Get Site DB Function****")
         f_uuid=str(uuid)+".db"
+        logging.info(f_uuid)
         print(f_uuid)
         path = Path(dir) / str(f_uuid) 
         return Database(path)
@@ -389,7 +420,7 @@ def init_site_db(site, _uuid="", dir="."):
         Database: The initialized database.
 
     """
-    
+    logging.info("****Init Site DB Function****")
     if not _uuid:
         s_uuid=str(uuid.uuid4())
     else:
@@ -463,6 +494,7 @@ def get_format_url(db, book, format):
     Returns:
         str: The URL for the specified book format.
     """
+    logging.info("****Get Format URL Function****")
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
     library=book['library']
     id_=str(book['id'])
@@ -484,6 +516,7 @@ def get_desc_url(db, book):
     Returns:
         str: The URL for the book description.
     """
+    logging.info("****Get Desc URL Function****")
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -514,6 +547,7 @@ def save_books_metadata_from_site(db, books):
     Returns:
     - None
     """
+    logging.info("****Save Books Metadata From Site Function****")
     uuid = list(db['site'].rows)[0]["uuid"]
     # print(uuid)
     ebooks_t=db["ebooks"]
@@ -524,12 +558,6 @@ def save_books_metadata_from_site(db, books):
     # ebooks_t.insert_all(books, alter=True)
     ebooks_t.insert_all(books, alter=True,  pk='uuid', batch_size=1000)
     # print([c[1] for c in ebooks_t.columns])
-
-##########
-# Unused #
-##########
-def load_metadata(dir, uuid):
-    pass
 
 ##########################################
 # Update Status when book details loaded #
@@ -544,6 +572,7 @@ def update_done_status(book):
     Returns:
         None: This function does not return anything.
     """
+    logging.info("****Update Done Status Function****")
     source=book['source']
     if source['status']!='ignored':
         if set(source['formats'].keys()) == set(book['formats']) & set(source['formats'].keys()):
@@ -564,6 +593,7 @@ def index_site_list_seq(file):
     Returns:
         None
     """
+    logging.info("****Index Site List Sequence Function****")
     with open(file) as f:
         for s in f.readlines():
             # try: 
@@ -585,11 +615,13 @@ def index_site_list(file):
     Returns:
         None
     """
+    logging.info("****Index Site List Function****")
     pool = Pool(40)
 
     with open(file) as f:
         sites = f.readlines()
         sites= [s.rstrip() for s in sites]
+        logging.info("Sites: "+str(sites))
         print(sites)
         pool.map(index_ebooks_except, sites)
 
@@ -606,10 +638,12 @@ def index_ebooks_except(site):
     Returns:
         None
     """
+    logging.info("****Index ebooks Exception Function****")
     try:
         index_ebooks(site)
     except:
         print("Error on site")
+        logging.error("Error on site: "+site)
 
 ################
 # Index Ebooks #
@@ -632,12 +666,13 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
     """
 
     #TODO old calibres don't manage libraries.  /ajax/library-info endpoint doesn't exist. It would be better to manage calibre version directly 
-
+    logging.info("****Index Ebooks Function****")
     libs=[]
     try:
         libs= get_libs_from_site(site)
     except:
         print("old lib")
+        logging.error("Error on site (Old Lib): "+site)
         
     _uuid=str(uuid.uuid4())
     
@@ -667,7 +702,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     Returns:
         None
     """
-    
+    logging.info("****Index Ebooks from Library Function****")
     offset= 0 if not start else start-1
     num=min(1000, num)
     server=site.rstrip('/')
@@ -678,8 +713,10 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     timeout=15
 
     print(f"\nIndexing library: {lib} from server: {server} ")
+    logging.info(f"Indexing library: {lib} from server: {server} ")
     url=api+'search'+library+'?num=0'
     print(f"\nGetting ebooks count of library: {lib} from server:{server} ")
+    logging.info(f"Getting ebooks count of library: {lib} from server:{server} ")
     # print(url)
     
     try:
@@ -687,10 +724,12 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
         r.raise_for_status()
     except requests.RequestException as e: 
         print("Unable to open site:", url)
+        logging.error("Unable to open site: "+url)
         return
         # pass
     except Exception as e:
         print ("Other issue:", e)
+        logging.error("Other issue: "+str(e))
         return
         # pass
     except :
@@ -702,7 +741,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     total_num= total_num if not stop else stop
     print()    
     print(f"Total count={total_num} from {server}")
- 
+    logging.info(f"Total count={total_num} from {server}")
     # library=r.json()["base_url"].split('/')[-1]
     # base_url=r.json()["base_url"]
 
@@ -723,6 +762,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
         # print()
         # print("Downloading ids: offset="+str(offset), "num="+str(remaining_num))
         print ('\r {:180.180}'.format(f'Downloading ids: offset={str(offset)} count={str(remaining_num)} from {server}'), end='')
+        logging.info(f"Downloading ids: offset={str(offset)} count={str(remaining_num)} from {server}")
 
         # url=server+base_url+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
         url=api+'search'+library+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
@@ -733,20 +773,24 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             r.raise_for_status()
         except requests.RequestException as e: 
             print ("Connection issue:", e)
+            logging.error("Connection issue: "+str(e))
             return
             # pass
         except Exception as e:
             print ("Other issue:", e)
+            logging.error("Other issue: "+str(e))
             return
             # pass
         except :
             print ("Wazza !!!!")
+            logging.error("Wazza !!!!")
             return
         # print("Ids received from:"+str(offset), "to:"+str(offset+remaining_num-1))
         
         # print()
         # print("Downloading metadata from", str(offset+1), "to", str(offset+remaining_num))
         print ('\r {:180.180}'.format(f'Downloading metadata from {str(offset+1)} to {str(offset+remaining_num)}/{total_num} from {server}'), end='')
+        logging.info("Downloading metadata from "+str(offset+1)+" to "+str(offset+remaining_num))
         books_s=",".join(str(i) for i in r.json()['book_ids'])
         url=api+'books'+library+'?ids='+books_s
         # url=server+base_url+'/books?ids='+books_s
@@ -758,24 +802,28 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             r.raise_for_status()
         except requests.RequestException as e: 
             print ("Connection issue:", e)
+            logging.error("Connection issue: "+str(e))
             return
             # pass
         except Exception as e:
             print ("Other issue:", e)
+            logging.error("Other issue: "+str(e))
             return
             # pass
         except :
             print ("Wazza !!!!")
+            logging.error("Wazza !!!!")
             return
         # print(len(r.json()), "received")
         print ('\r {:180.180}'.format(f'{len(r.json())} received'), end='')
-        
+        logging.info(f"{len(r.json())} received")
         
         books=[]
         for id, r_book in r.json().items():                
             uuid=r_book['uuid']
             if not uuid:
                 print ("No uuid for ebook: ignored")
+                logging.info("No uuid for ebook: ignored")
                 continue 
 
 
@@ -787,7 +835,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             # print (f'\r--> {range}/{total_num} - {desc}', end='')
             # print (f'\r{server}--> {range}/{total_num} - {desc}', end='')
             print ('\r {:180.180} '.format(f'{range}/{total_num} ({server} : {uuid} --> {desc}'), end='')
-
+            logging.info(f"{range}/{total_num} ({server} : {uuid} --> {desc}")
 
             if not force_refresh:
                 # print("Checking local metadata:", uuid)
@@ -795,10 +843,12 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
                     book = load_metadata(dir, uuid)
                 except:
                     print("Unable to get metadata from:", uuid)
+                    logging.error("Unable to get metadata from: "+str(uuid))
                     range+=1
                     continue
                 if book:
                     print("Metadata already present for:", uuid)
+                    logging.error("Metadata already present for: "+str(uuid))
                     range+=1
                     continue
 
@@ -898,13 +948,14 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
         # print()
         print("Saving metadata")
         print ('\r {:180.180}'.format(f'Saving metadata from {server}'), end='')
-
+        logging.info("Saving metadata from %s", server)
         try:
             save_books_metadata_from_site(db, books)
             print('\r {:180.180}'.format(f'--> Saved {range-1}/{total_num} ebooks from {server}'), end='')
+            logging.info("Saved %s/%s ebooks from %s", range-1, total_num, server)
         except BaseException as err:
             print (err)
-
+            logging.error(err)
         print()
         print()
 
@@ -929,6 +980,7 @@ def query(query_str="", dir="."):
     Returns:
     - None
     """
+    logging.info("Querying database: %s", query_str)
     dbs=[]
     for path in os.listdir(dir):
         db = Database(path)
@@ -939,11 +991,12 @@ def query(query_str="", dir="."):
         # url=db['site'].get(1)['urls'][0]
         url=db['site'].get(1)
         print (url)
+        logging.info("Querying %s", url)
 
         for ebook in db["ebooks"].rows_where(query_str):
             # print (f"{ebook['title']} ({ebook['uuid']})")
             print (ebook)
-
+            logging.info("%s (%s)", ebook['title'], ebook['uuid'])
 
 ##################
 # Get Statistics #
@@ -958,6 +1011,7 @@ def get_stats(dir="."):
     Returns:
     None
     """
+    logging.info("*** get_stats ***")
     dbs=[]
     size=0
     count=0
@@ -983,10 +1037,13 @@ def get_stats(dir="."):
                         # print (f'\r{count} {f} --> {uuid}: {title}', end ='')
                         # print (f'\r{count} : {uuid} --> {f}', end='')
                         print (f'\r{count} formats - ebook : {uuid}', end='')
+                        logging.info("%s : %s", uuid, f)
 
     print()
     print("Total count of formats:", humanize.intcomma(count)) 
+    logging.info("Total count of formats: %s", humanize.intcomma(count))
     print("Total size:", hsize(size)) 
+    logging.info("Total size: %s", hsize(size))
     print()
 
 ###############################
@@ -1003,8 +1060,10 @@ def get_site_db(uuid, dir):
         Returns:
             Database: The site database corresponding to the given UUID.
         """
+        loggin.info("*** get_site_db ***")
         f_uuid=str(uuid)+".db"
         print(f_uuid)
+        logging.info(f_uuid)
         path = Path(dir) / str(f_uuid) 
         return Database(path)
 
@@ -1023,7 +1082,7 @@ def init_site_db(site, _uuid="", dir="."):
     Returns:
         Database: The initialized site database.
     """
-    
+    logging.info("*** init_site_db ***")
     if not _uuid:
         s_uuid=str(uuid.uuid4())
     else:
@@ -1101,6 +1160,7 @@ def get_format_url(db, book, format):
     Returns:
         str: The URL for the specified format of the book.
     """
+    logging.info("****Get Format URL Function****")
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
     library=book['library']
     id_=str(book['id'])
@@ -1122,6 +1182,7 @@ def get_desc_url(db, book):
     Returns:
         str: The description URL for the given book.
     """
+    logging.info("****Get Description URL Function****")
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -1152,6 +1213,7 @@ def save_books_metadata_from_site(db, books):
     Returns:
         None
     """
+    logging.info("****Save Books Metadata Function****")
     uuid = list(db['site'].rows)[0]["uuid"]
 
     # print(uuid)
@@ -1185,6 +1247,7 @@ def load_metadata(dir, uuid):
     Raises:
         None
     """
+    logging.info("****Load Metadata Function****")
     pass
 ######################
 # Update Done Status #
@@ -1199,6 +1262,7 @@ def update_done_status(book):
     Returns:
         None
     """
+    logging.info("****Update Done Status Function****")
     source=book['source']
     if source['status']!='ignored':
         if set(source['formats'].keys()) == set(book['formats']) & set(source['formats'].keys()):
@@ -1219,6 +1283,7 @@ def index_site_list_seq(file):
     Returns:
         None
     """
+    logging.info("****Index Site List Sequence Function****")
     with open(file) as f:
         for s in f.readlines():
             # try: 
@@ -1240,12 +1305,14 @@ def index_site_list(file):
     Returns:
         None
     """
+    logging.info("****Index Site List Function****")
     pool = Pool(40)
 
     with open(file) as f:
         sites = f.readlines()
         sites= [s.rstrip() for s in sites]
         print(sites)
+        logging.info("Sites: "+str(sites))
         pool.map(index_ebooks_except, sites)
 
 ##########################
@@ -1260,10 +1327,12 @@ def index_ebooks_except(site):
 
     :return: None
     """
+    logging.info("****Index Ebooks Exception Function****")
     try:
         index_ebooks(site)
     except:
         print("Error on site")
+        logging.error("Error on site: %s", site)
 
 ################
 # Index Ebooks #
@@ -1284,7 +1353,7 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
     Returns:
         None
     """
-
+    logging.info("****Index Ebooks Function****")
     #TODO old calibres don't manage libraries.  /ajax/library-info endpoint doesn't exist. It would be better to manage calibre version directly 
 
     libs=[]
@@ -1292,6 +1361,7 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
         libs= get_libs_from_site(site)
     except:
         print("old lib")
+        logging.error("old lib: %s", site)
         
     _uuid=str(uuid.uuid4())
     
@@ -1321,7 +1391,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     Returns:
     None
     """
-    
+    logging.info("****Index Ebooks From Library Function****")
     offset= 0 if not start else start-1
     num=min(1000, num)
     server=site.rstrip('/')
@@ -1332,8 +1402,10 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     timeout=15
 
     print(f"\nIndexing library: {lib} from server: {server} ")
+    logging.info("Indexing library: %s from server: %s ", lib, server)
     url=api+'search'+library+'?num=0'
     print(f"\nGetting ebooks count of library: {lib} from server:{server} ")
+    logging.info("Getting ebooks count of library: %s from server: %s ", lib, server)
     # print(url)
     
     try:
@@ -1341,14 +1413,16 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
         r.raise_for_status()
     except requests.RequestException as e: 
         print("Unable to open site:", url)
+        logging.info("Unable to open site: %s", url)
         return
         # pass
     except Exception as e:
         print ("Other issue:", e)
+        logging.error("Other issue: %s", e)
         return
-        # pass
     except :
         print("Wazza !!!!")
+        logging.error("Wazza !!!!")
         sys.exit(1)
         
 
@@ -1356,12 +1430,8 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     total_num= total_num if not stop else stop
     print()    
     print(f"Total count={total_num} from {server}")
- 
-    # library=r.json()["base_url"].split('/')[-1]
-    # base_url=r.json()["base_url"]
+    logging.info("Total count=%s from %s", total_num, server)
 
-    # cache_db=init_cache_db(dir=dir)
-    # _uuid=get_uuid_from_url(cache_db)
     db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])
 
@@ -1374,10 +1444,8 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
     range=offset+1
     while offset < total_num:
         remaining_num = min(num, total_num - offset)
-        # print()
-        # print("Downloading ids: offset="+str(offset), "num="+str(remaining_num))
         print ('\r {:180.180}'.format(f'Downloading ids: offset={str(offset)} count={str(remaining_num)} from {server}'), end='')
-
+        logging.info("Downloading ids: offset=%s count=%s from %s", str(offset), str(remaining_num), server)
         # url=server+base_url+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
         url=api+'search'+library+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
 
@@ -1387,49 +1455,48 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             r.raise_for_status()
         except requests.RequestException as e: 
             print ("Connection issue:", e)
+            logging.error("Connection issue: %s", e)
             return
             # pass
         except Exception as e:
             print ("Other issue:", e)
+            logging.error("Other issue: %s", e)
             return
             # pass
         except :
             print ("Wazza !!!!")
+            logging.error("Wazza !!!!")
             return
-        # print("Ids received from:"+str(offset), "to:"+str(offset+remaining_num-1))
-        
-        # print()
-        # print("Downloading metadata from", str(offset+1), "to", str(offset+remaining_num))
+
         print ('\r {:180.180}'.format(f'Downloading metadata from {str(offset+1)} to {str(offset+remaining_num)}/{total_num} from {server}'), end='')
+        logging.info("Downloading metadata from %s to %s/%s from %s", str(offset+1), str(offset+remaining_num), total_num, server)
         books_s=",".join(str(i) for i in r.json()['book_ids'])
         url=api+'books'+library+'?ids='+books_s
-        # url=server+base_url+'/books?ids='+books_s
-        # print("->", url)
-        # print ('\r{:190.190}'.format(f'url= {url} ...'), end='')
 
         try:
             r=requests.get(url, verify=False, timeout=(60, 60))
             r.raise_for_status()
         except requests.RequestException as e: 
             print ("Connection issue:", e)
+            logging.error("Connection issue: %s", e)
             return
-            # pass
         except Exception as e:
             print ("Other issue:", e)
+            logging.error("Other issue: %s", e)
             return
-            # pass
         except :
             print ("Wazza !!!!")
+            logging.error("Wazza !!!!")
             return
-        # print(len(r.json()), "received")
         print ('\r {:180.180}'.format(f'{len(r.json())} received'), end='')
-        
+        logging.info("%s received", len(r.json()))        
         
         books=[]
         for id, r_book in r.json().items():                
             uuid=r_book['uuid']
             if not uuid:
                 print ("No uuid for ebook: ignored")
+                logging.info("No uuid for ebook: ignored")
                 continue 
 
 
@@ -1438,21 +1505,20 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             else:
                 desc= f"({r_book['title']})"
 
-            # print (f'\r--> {range}/{total_num} - {desc}', end='')
-            # print (f'\r{server}--> {range}/{total_num} - {desc}', end='')
             print ('\r {:180.180} '.format(f'{range}/{total_num} ({server} : {uuid} --> {desc}'), end='')
-
+            logging.info("%s/%s (%s : %s --> %s)", range, total_num, server, uuid, desc)
 
             if not force_refresh:
-                # print("Checking local metadata:", uuid)
                 try:
                     book = load_metadata(dir, uuid)
                 except:
                     print("Unable to get metadata from:", uuid)
+                    logging.error("Unable to get metadata from: %s", uuid)
                     range+=1
                     continue
                 if book:
                     print("Metadata already present for:", uuid)
+                    logging.error("Metadata already present for: %s", uuid)
                     range+=1
                     continue
 
@@ -1551,13 +1617,16 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 
         # print()
         print("Saving metadata")
+        logging.info("Saving metadata")
         print ('\r {:180.180}'.format(f'Saving metadata from {server}'), end='')
-
+        logging.info("Saving metadata from %s", server)
         try:
             save_books_metadata_from_site(db, books)
             print('\r {:180.180}'.format(f'--> Saved {range-1}/{total_num} ebooks from {server}'), end='')
+            logging.info("--> Saved %s/%s ebooks from %s", range-1, total_num, server)
         except BaseException as err:
             print (err)
+            logging.error(err)
 
         print()
         print()
@@ -1583,6 +1652,7 @@ def query(query_str="", dir="."):
     Returns:
         None
     """
+    logging.info("****Query Function****")
     dbs=[]
     for path in os.listdir(dir):
         db = Database(path)
@@ -1593,10 +1663,12 @@ def query(query_str="", dir="."):
         # url=db['site'].get(1)['urls'][0]
         url=db['site'].get(1)
         print (url)
+        logging.info("Querying %s",url)
 
         for ebook in db["ebooks"].rows_where(query_str):
             # print (f"{ebook['title']} ({ebook['uuid']})")
             print (ebook)
+            logging.info("Found %s (%s)", ebook['title'], ebook['uuid'])
 
 ###########################
 # Get Stats on EBook Type #
@@ -1611,6 +1683,7 @@ def get_stats(dir="."):
     Returns:
         None
     """
+    logging.info("****Get Stats Function****")
     dbs=[]
     size=0
     count=0
@@ -1636,10 +1709,13 @@ def get_stats(dir="."):
                         # print (f'\r{count} {f} --> {uuid}: {title}', end ='')
                         # print (f'\r{count} : {uuid} --> {f}', end='')
                         print (f'\r{count} formats - ebook : {uuid}', end='')
+                        logging.info("Found %s (%s)", title, uuid)
 
     print()
     print("Total count of formats:", humanize.intcomma(count)) 
+    logging.info("Total count of formats: %s", humanize.intcomma(count))
     print("Total size:", hsize(size)) 
+    logging.info("Total size: %s", hsize(size))
     print()
 
 #######################
@@ -1656,6 +1732,7 @@ def init_index_db(dir="."):
         Database: The initialized index database.
     """
     
+    logging.info("****Initialize Index Function****")
     path = Path(dir) / "index.db" 
     
     db_index = Database(path)
@@ -1700,6 +1777,7 @@ def get_img_url(db, book):
     Returns:
         str: The URL of the image.
     """
+    logging.info("****Get Img URL Function****")
     url = json.loads(list(db['site'].rows)[0]["urls"])[0]
 
     library=book['library']
@@ -1717,10 +1795,10 @@ def get_img_url(db, book):
 
     return d_url
 
-########################
-# Build Index English  #
-########################
-def build_index_eng (dir='.', english=True):
+################
+# Build Index  #
+################
+def build_index(dir='.'):
     """
     Builds an index for English ebooks in the given directory.
 
@@ -1732,6 +1810,7 @@ def build_index_eng (dir='.', english=True):
         None
     """
 
+    logging.info("****Build Index Function****")
     dbs=[]
     for f in os.listdir(dir):
         if not f.endswith(".db"):
@@ -1744,6 +1823,7 @@ def build_index_eng (dir='.', english=True):
             db = Database(p.resolve())
         except:
             print ("Pb with:", f)
+            logging.info("Pb with:", f)
         dbs.append(db)
     
     db_index = init_index_db(dir=dir)
@@ -1785,9 +1865,10 @@ def build_index_eng (dir='.', english=True):
             summary['year']=pubdate[0:4] if pubdate else "" 
             summaries.append(summary)
             # print(summary)
+            logging.info("Summary: %s", summary)
             count+=1
             print (f"\r{count} - ebook handled: {ebook['uuid']}", end='')
-
+            logging.info(f"\r{count} - ebook handled: {ebook['uuid']}")
             if not count % batch_size:
                 # print()
                 # print(f"Saving summary by batch: {len(summaries)}")    
@@ -1801,7 +1882,9 @@ def build_index_eng (dir='.', english=True):
                     # print(dump)
                     print()
                     print("UUID collisions. Probalbly a site duplicate")
+                    logging.error("UUID collisions. Probalbly a site duplicate")
                     print(e)
+                    logging.error("Error: %s", e)
                     print()
 
                     # index_t.upsert_all(summaries, batch_size=batch_size, pk='uuid')
@@ -1819,14 +1902,16 @@ def build_index_eng (dir='.', english=True):
         index_t.insert_all(summaries, batch_size=batch_size)
     except:
         print("sqlite3.IntegrityError: UNIQUE constraint failed: summary.uuid")
-
+        logging.error("sqlite3.IntegrityError: UNIQUE constraint failed: summary.uuid")
     # print("summary done")
     # print()
     
     print()
     print("fts")
+    logging.error("fts")
     index_t.populate_fts(["title", "authors", "series", "identifiers", "language", "tags", "publisher", "formats", "year"])
     print("fts done")
+    logging.error("fts done")
 
 ############################
 # Search books in Index.db #
@@ -1843,6 +1928,7 @@ def search(query_str, dir=".", links_only=False):
     Returns:
         None
     """
+    logging.info("****Search Function****")
     path = Path(dir) / "index.db" 
     db_index = Database(path)
     # table=db_index["summary"]
@@ -1878,14 +1964,18 @@ def search(query_str, dir=".", links_only=False):
         if not links_only:
             print()
             print("Title:", ebook[2])
+            logging.info("Title: %s", ebook[2])
             print("Author:", ebook[3])
+            logging.info("Author: %s", ebook[3])
             print("Serie:", ebook[4])
+            logging.info("Serie: %s", ebook[4])
             print("Formats:", formats)
+            logging.info("Formats: %s", formats)
 
         for f in formats:
             print(url+"get/"+f+"/"+id_+"/"+library)
-
-
+            logging.info(url+"get/"+f+"/"+id_+"/"+library)
+            
 #########################
 # Index.db to JSON file #
 #########################
@@ -1900,6 +1990,7 @@ def index_to_json(dir='.'):
     Returns:
         None
     """
+    logging.info("****Index to JSON Function****")
     path = Path(dir) / "index.db" 
     db = Database(path)
 
@@ -1926,6 +2017,7 @@ def index_to_json(dir='.'):
             sys.stdout.flush()
             # return
     except BrokenPipeError:
+        logging.error("BrokenPipeError")
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())
         sys.exit(1) 
@@ -1946,7 +2038,7 @@ def init_diff_db(dir="."):
     Raises:
         None
     """
-    
+    logging.info("****Initialize Diff Function****")
     path = Path(dir) / "diff.db" 
     
     db_diff = Database(path)
@@ -1985,6 +2077,7 @@ def diff(old, new, dir=".", ):
     :param new: The new value.
     :param dir: The directory where the files are located. Defaults to ".".
     """
+    logging.info("****Diff Function****")
     path = Path(dir) / old 
     db_old = Database(path)
 
@@ -1997,6 +2090,7 @@ def diff(old, new, dir=".", ):
     for i, n_book in enumerate(db_new["summary"].rows):
         n_uuid = n_book['uuid']
         print(i, n_uuid)
+        logging.info(i, n_uuid)
         try:
             o_book = db_old["summary"].get(n_uuid)
             # print(n_uuid, '=OK')
@@ -2004,6 +2098,7 @@ def diff(old, new, dir=".", ):
             n_loc=json.loads(n_book['title'])['href']
             if o_loc != n_loc :
                 print(n_uuid, 'MOVED')
+                logging.info(n_uuid, 'MOVED')
                 n_book["status"]="MOVED"
                 n_book["old_location"]=o_loc
                 n_book.pop ('cover', None)
@@ -2011,9 +2106,11 @@ def diff(old, new, dir=".", ):
         except:
             # print(n_uuid, '=NOK')
             n_book.pop ('cover', None)
+            logging.error(n_uuid, '=NOK')
             n_book["status"]="NEW"
+            logging.error(n_uuid, 'NEW')
             db_diff["summary"].insert(n_book, pk='uuid')
-
+            logging.error(n_uuid, 'inserted')
 ############################
 # Query Calibre by Country #
 ############################
@@ -2027,6 +2124,7 @@ def calibre_by_country(country):
     Returns:
         None
     """
+    logging.info("****Calibre by Country Function****")
     page = 1
     apiquery = 'calibre http.status:"200" country:"' + country + '"'+ ',limit=50'
     try:
@@ -2038,15 +2136,18 @@ def calibre_by_country(country):
 #               Check if the server is insecure (not using HTTPS)
                 if 'https' not in result['data']:
                     print(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
+                    logging.info(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
                     ipaddress = str(result['ip_str'])
                     port = str(result['port'])
                     server_row = 'http://' + ipaddress + ':' + port + '\n'
                     print(server_row)
+                    logging.info(server_row)
                     # Add the server to the servers table
                     #site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
                     csvfile.write(server_row)
     except shodan.APIError as e:
         print ('Error: %s' % e)
+        logging.error('Error: %s' % e)
     csvfile.close()
     import_urls_from_file(filename)
     return()
@@ -2065,6 +2166,7 @@ def book_search(country):
     Returns:
         None
     """
+    logging.info("****Book Search Function****")
     import_urls_from_file(country + '.txt')
     return()
 
@@ -2082,6 +2184,7 @@ def output_online_db():
     Returns:
     None
     """
+    logging.info("****Output Online DB Function****")
     script = "select url from sites where status='online'"
     df = pd.read_sql(script, site_conn)
     df.to_csv('online.txt', header=False, index=False)
