@@ -33,7 +33,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
 SHODAN_API_KEY = "<Put Shodan API Key here>"
 global api
-api = shodan.Shodan(SHODAN_API_KEY)
+api = shodan.Shodan('sEsxRpsOrBGJANgG1q6qL46xv153NrSV')
 
 global site_conn
 site_conn = sqlite3.connect("sites.db")
