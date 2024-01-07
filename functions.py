@@ -2166,8 +2166,12 @@ def book_search(country):
     Returns:
         None
     """
+    print("Starting Book Search for Country: ", country)
+    logging.info("Starting Book Search for Country:", country)
     logging.info("****Book Search Function****")
     import_urls_from_file(country + '.txt')
+    print("Ending Book Search for: ", country)
+    logging.info("Ending Book Search for: ", country)
     return()
 
 ############################################

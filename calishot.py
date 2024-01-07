@@ -1,12 +1,12 @@
-####################
-# Main Application #
-# Python3 test.py  #
-####################
+########################
+# Main Application     #
+# Python3 calishot.py  #
+########################
 
 from functions import import_urls_from_file, check_calibre_list, index_site_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_list, check_calibre_site, build_index, index_to_json, diff, calibre_by_country, book_search, output_online_db
 import logging
 import threading
-logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.DEBUG)
+logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.ERROR)
 
 #####################
 # Flags for testing #
@@ -17,14 +17,14 @@ run_check_calibre_list = True
 run_output_online_db = True
 run_index_site_list = True
 run_index_site_list_seq = True
-run_build_index = True
+run_build_index_eng = True
 run_get_stats = True
 run_index_to_json = True
 
 ####################################################
 # Call search_by_country Function for each Country #
 ####################################################
-#run_search_by_country = False
+run_search_by_country = False
 if run_search_by_country:
     print ("Running search_by_country...")
     logging.info("Running search_by_country...")
@@ -51,7 +51,7 @@ if run_search_by_country:
 ##############################################
 # Call book_search Function for each Country #
 ##############################################
-#run_book_search = False
+run_book_search = False
 if run_book_search:
     print ("Running run_book_search...")
     logging.info("Running run_book_search...")
@@ -134,7 +134,7 @@ if run_index_site_list_seq:
 # Call build_index_eng Function #
 #################################
 #run_build_index_eng = False
-if run_build_index:
+if run_build_index_eng:
     print ("Running run_build_index_eng...")
     logging.info("Running run_build_index_eng...")
     build_index()
