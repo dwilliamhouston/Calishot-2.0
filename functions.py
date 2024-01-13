@@ -2142,8 +2142,9 @@ def calibre_by_country(country):
                     server_row = 'http://' + ipaddress + ':' + port + '\n'
                     print(server_row)
                     logging.info(server_row)
+                    
                     # Add the server to the servers table
-                    #site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
+                    site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
                     csvfile.write(server_row)
     except shodan.APIError as e:
         print ('Error: %s' % e)

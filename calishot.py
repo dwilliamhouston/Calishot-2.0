@@ -24,7 +24,7 @@ run_index_to_json = True
 ####################################################
 # Call search_by_country Function for each Country #
 ####################################################
-run_search_by_country = False
+#run_search_by_country = False
 if run_search_by_country:
     print ("Running search_by_country...")
     logging.info("Running search_by_country...")
@@ -51,7 +51,7 @@ if run_search_by_country:
 ##############################################
 # Call book_search Function for each Country #
 ##############################################
-run_book_search = False
+#run_book_search = False
 if run_book_search:
     print ("Running run_book_search...")
     logging.info("Running run_book_search...")
