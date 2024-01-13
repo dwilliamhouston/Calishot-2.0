@@ -2,3 +2,5 @@
 *.db
 *.zip
 *.log
+books.csv
+__pycache__/functions.cpython-310.pyc
