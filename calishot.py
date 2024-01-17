@@ -47,6 +47,7 @@ if run_search_by_country:
     calibre_by_country('HK')
     calibre_by_country('KE')
     calibre_by_country('SE')
+    calibre_by_country('PL')
     
 ##############################################
 # Call book_search Function for each Country #
@@ -92,6 +93,8 @@ if run_book_search:
     x=threading.Thread(target=book_search, args=('KE'))        
     x.start()
     x=threading.Thread(target=book_search, args=('SE'))        
+    x.start()
+    x=threading.Thread(target=book_search, args=('PL'))        
     x.start()
 
 ####################################
