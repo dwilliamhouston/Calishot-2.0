@@ -14,3 +14,5 @@ RUN pip3 install datasette-pretty-json
 RUN pip3 install -r requirements.txt
 # Expose a port on the container
 EXPOSE 5000
+# Expose a local host directory to the container
+

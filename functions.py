@@ -7,6 +7,7 @@ import gevent
 from gevent import monkey
 from gevent import Timeout
 from gevent.pool import Pool
+import ipaddress
 import pandas as pd
 from sqlite_utils import Database
 import sqlite3
@@ -31,18 +32,17 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
-SHODAN_API_KEY = "<Put Shodan API Key here>"
 global api
 api = shodan.Shodan('sEsxRpsOrBGJANgG1q6qL46xv153NrSV')
 
 global site_conn
-site_conn = sqlite3.connect("sites.db")
+data_dir = "./data/"
+site_conn = sqlite3.connect(data_dir + "sites.db")
 site_cursor = site_conn.cursor()
-
 ########################
 # Setup Sites Database #
 ########################
-def init_sites_db(dir="."):
+def init_sites_db(dir=data_dir):
     """
     Initializes the sites database.
 
@@ -280,7 +280,7 @@ def map_site_from_url(url):
 ############################################################
 # Import the URLS from the temp file and write to Database #
 ############################################################
-def import_urls_from_file(filepath, dir='.'):
+def import_urls_from_file(filepath, dir=data_dir):
     """
     Import URLs from a file and add them to a sites database.
 
@@ -361,7 +361,7 @@ def get_libs_from_site(site):
 ###################################
 # Check the list of sites in file #
 ###################################
-def check_calibre_list(dir='.'):    
+def check_calibre_list(dir=data_dir):    
     """
     Generates a comment for the given function body in a markdown code block with the correct language syntax.
 
@@ -375,7 +375,7 @@ def check_calibre_list(dir='.'):
     db=init_sites_db(dir)
     sites=[]
     for row in db["sites"].rows:
-        logging.info("Queining: %s", row['url'])
+        logging.info("Queueing: %s", row['url'])
         print(f"Queueing:{row['url']}")
         sites.append(row)
     print(sites)
@@ -386,7 +386,7 @@ def check_calibre_list(dir='.'):
 # Get site UUID #
 #################
 # example of a fts search sqlite-utils index.db "select * from summary_fts where summary_fts  match 'title:fre*'"
-def get_site_db(uuid, dir):
+def get_site_db(uuid, data_dir):
         """
         Retrieves the site database based on the given UUID and directory.
 
@@ -407,7 +407,7 @@ def get_site_db(uuid, dir):
 ############################
 # Initialize Site Database #
 ############################
-def init_site_db(site, _uuid="", dir="."):
+def init_site_db(site, _uuid="", dir=data_dir):
     """
     Initializes a site database.
 
@@ -648,7 +648,7 @@ def index_ebooks_except(site):
 ################
 # Index Ebooks #
 ################
-def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Retrieves ebooks from a site and indexes them into a library.
 
@@ -678,14 +678,14 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
     
     if libs:
         for lib in libs:
-            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
     else:
-            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
 
 #############################
 # Index Ebooks from Library #
 #############################
-def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Index ebooks from a library on a site.
 
@@ -747,7 +747,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 
     # cache_db=init_cache_db(dir=dir)
     # _uuid=get_uuid_from_url(cache_db)
-    db=init_site_db(site, _uuid=_uuid, dir=dir)
+    db=init_site_db(site, _uuid=_uuid, dir=data_dir)
     r_site = (list(db['site'].rows)[0])
 
     r_site['version']=r.headers['server']
@@ -840,7 +840,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
             if not force_refresh:
                 # print("Checking local metadata:", uuid)
                 try:
-                    book = load_metadata(dir, uuid)
+                    book = load_metadata(data_dir, uuid)
                 except:
                     print("Unable to get metadata from:", uuid)
                     logging.error("Unable to get metadata from: "+str(uuid))
@@ -969,7 +969,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 ############################
 # Query EBooks in Database #
 ############################
-def query(query_str="", dir="."):
+def query(query_str="", dir=data_dir):
     """
     Generates a function comment for the given function body in a markdown code block with the correct language syntax.
 
@@ -1001,7 +1001,7 @@ def query(query_str="", dir="."):
 ##################
 # Get Statistics #
 ##################
-def get_stats(dir="."):
+def get_stats(dir=data_dir):
     """
     Retrieves statistics about the ebooks in a given directory.
 
@@ -1049,7 +1049,7 @@ def get_stats(dir="."):
 ###############################
 # Get Temporary Site Database #
 ###############################
-def get_site_db(uuid, dir):
+def get_site_db(uuid, data_dir):
         """
         Generate a function comment for the given function body.
 
@@ -1070,7 +1070,7 @@ def get_site_db(uuid, dir):
 ################################
 # Init Temporary Site Database #
 ################################
-def init_site_db(site, _uuid="", dir="."):
+def init_site_db(site, _uuid="", dir=data_dir):
     """
     Initializes a site database.
 
@@ -1233,7 +1233,7 @@ def save_books_metadata_from_site(db, books):
 #################
 # Load Metadata #
 #################
-def load_metadata(dir, uuid):
+def load_metadata(data_dir, uuid):
     """
     Load metadata from a directory using the specified UUID.
 
@@ -1337,7 +1337,7 @@ def index_ebooks_except(site):
 ################
 # Index Ebooks #
 ################
-def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Generates a function comment for the given function body.
 
@@ -1367,14 +1367,14 @@ def index_ebooks(site, library="", start=0, stop=0, dir=".", num=1000, force_ref
     
     if libs:
         for lib in libs:
-            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
     else:
-            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
 
 #############################
 # Index Ebooks from Library #
 #############################
-def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=".", num=1000, force_refresh=False):
+def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Indexes ebooks from a library on a specific site.
     
@@ -1641,7 +1641,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir="
 ###########################
 # Query Books in Database #
 ###########################
-def query(query_str="", dir="."):
+def query(query_str="", dir=data_dir):
     """
     This function takes in an optional query string and directory path and performs a query on a list of databases located in the specified directory.
     
@@ -1673,7 +1673,7 @@ def query(query_str="", dir="."):
 ###########################
 # Get Stats on EBook Type #
 ###########################
-def get_stats(dir="."):
+def get_stats(dir=data_dir):
     """
     Retrieves statistics about the ebooks in the specified directory.
 
@@ -1721,7 +1721,7 @@ def get_stats(dir="."):
 #######################
 # Initialize Index.db #
 #######################
-def init_index_db(dir="."):
+def init_index_db(dir=data_dir):
     """
     Initializes an index database in the specified directory.
     
@@ -1798,7 +1798,7 @@ def get_img_url(db, book):
 ################
 # Build Index  #
 ################
-def build_index(dir='.'):
+def build_index(dir=data_dir):
     """
     Builds an index for English ebooks in the given directory.
 
@@ -1809,7 +1809,7 @@ def build_index(dir='.'):
     Returns:
         None
     """
-
+    dir=data_dir
     logging.info("****Build Index Function****")
     dbs=[]
     for f in os.listdir(dir):
@@ -1916,7 +1916,7 @@ def build_index(dir='.'):
 ############################
 # Search books in Index.db #
 ############################
-def search(query_str, dir=".", links_only=False):
+def search(query_str, dir=data_dir, links_only=False):
     """
     Search for ebooks in the specified directory using a query string.
     
@@ -1980,7 +1980,7 @@ def search(query_str, dir=".", links_only=False):
 # Index.db to JSON file #
 #########################
 # https://stackoverflow.com/questions/26692284/how-to-prevent-brokenpipeerror-when-doing-a-flush-in-python
-def index_to_json(dir='.'):
+def index_to_json(dir=data_dir):
     """
     Converts the index database to a JSON file.
 
@@ -2025,7 +2025,7 @@ def index_to_json(dir='.'):
 ######################
 # Initialize Diff.db #
 ######################
-def init_diff_db(dir="."):
+def init_diff_db(dir=data_dir):
     """
     Initializes a new database for storing diff information.
 
@@ -2069,7 +2069,7 @@ def init_diff_db(dir="."):
 #######################
 # Difference Function #
 #######################
-def diff(old, new, dir=".", ):
+def diff(old, new, dir=data_dir, ):
     """
     Generate the function comment for the given function body in a markdown code block with the correct language syntax.
 
@@ -2111,6 +2111,8 @@ def diff(old, new, dir=".", ):
             logging.error(n_uuid, 'NEW')
             db_diff["summary"].insert(n_book, pk='uuid')
             logging.error(n_uuid, 'inserted')
+
+
 ############################
 # Query Calibre by Country #
 ############################
@@ -2128,23 +2130,23 @@ def calibre_by_country(country):
     page = 1
     apiquery = 'calibre http.status:"200" country:"' + country + '"'+ ',limit=50'
     try:
-        results = api.search(apiquery, limit=20)
-        filename = country + ".txt"
-                
+        print('apiquery= ', apiquery)
+        results = api.search(apiquery, limit=40)
+        filename = "./data/" + country + ".txt"
         csvfile = open(filename, 'w')
         for result in results['matches']:
 #               Check if the server is insecure (not using HTTPS)
-                if 'https' not in result['data']:
-                    print(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
-                    logging.info(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
-                    ipaddress = str(result['ip_str'])
-                    port = str(result['port'])
-                    server_row = 'http://' + ipaddress + ':' + port + '\n'
-                    print(server_row)
-                    logging.info(server_row)
-                    # Add the server to the servers table
-                    #site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
-                    csvfile.write(server_row)
+                    if 'https' not in result['data']:
+                        print(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
+                        logging.info(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
+                        ipaddress = str(result['ip_str'])
+                        port = str(result['port'])
+                        server_row = 'http://' + ipaddress + ':' + port + '\n'
+                        print(server_row)
+                        logging.info(server_row)
+                        # Add the server to the servers table
+                        #site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
+                        csvfile.write(server_row)
     except shodan.APIError as e:
         print ('Error: %s' % e)
         logging.error('Error: %s' % e)
@@ -2190,6 +2192,7 @@ def output_online_db():
     """
     logging.info("****Output Online DB Function****")
     script = "select url from sites where status='online'"
+    print("site_conn = ", site_conn)
     df = pd.read_sql(script, site_conn)
-    df.to_csv('online.txt', header=False, index=False)
+    df.to_csv(data_dir + 'online.txt', header=False, index=False)
     return()
