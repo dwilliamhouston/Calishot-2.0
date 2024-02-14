@@ -678,9 +678,9 @@ def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, forc
     
     if libs:
         for lib in libs:
-            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
     else:
-            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
 
 #############################
 # Index Ebooks from Library #
@@ -747,7 +747,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
 
     # cache_db=init_cache_db(dir=dir)
     # _uuid=get_uuid_from_url(cache_db)
-    db=init_site_db(site, _uuid=_uuid, dir=data_dir)
+    db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])
 
     r_site['version']=r.headers['server']
@@ -840,7 +840,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
             if not force_refresh:
                 # print("Checking local metadata:", uuid)
                 try:
-                    book = load_metadata(data_dir, uuid)
+                    book = load_metadata(dir, uuid)
                 except:
                     print("Unable to get metadata from:", uuid)
                     logging.error("Unable to get metadata from: "+str(uuid))
@@ -1367,9 +1367,9 @@ def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, forc
     
     if libs:
         for lib in libs:
-            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
     else:
-            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=data_dir, num=num, force_refresh=force_refresh)   
+            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
 
 #############################
 # Index Ebooks from Library #
@@ -2171,7 +2171,7 @@ def book_search(country):
     print("Starting Book Search for Country: ", country)
     logging.info("Starting Book Search for Country:", country)
     logging.info("****Book Search Function****")
-    import_urls_from_file(country + '.txt')
+    import_urls_from_file(data_dir + country + '.txt')
     print("Ending Book Search for: ", country)
     logging.info("Ending Book Search for: ", country)
     return()
