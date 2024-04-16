@@ -17,13 +17,22 @@ This code is based on code created by Krazybug - https://github.com/Krazybug/cal
   Step 3 - download index.db into your venv directory.
 
   Step 4 - Execute from command line:
-  datasette serve index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata       metadata.json
+  docker run -d \
+  --name=calishot \
+  -p 5001:5000 \
+  -v /LOCALDIRHERE/app/data:/app/data \
+  dwilliamhouston/shodantest:latest datasette -p 5000 -h 0.0.0.0 /app/data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000 --config num_sql_threads:10 --config allow_csv_stream:off --metadata metadata.json
 
 <B>Instructions if using Docker rather than setting up your own Python environment:</B>
 
   Step 1 - Create a directory called /app and then a directory called /app/data and put the index.db file in it. 
 
-  Step 2 - docker -v /app/data:/app/data run -p 5001:5000 dwilliamhouston/shodantest:latest datasette -p 5000 -h 0.0.0.0 /app/data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000  --config num_sql_threads:10 --config allow_csv_stream:off  --metadata metadata.json
+  Step 2 Execute from command line:
+  docker run -d \
+  --name=calishot \
+  -p 5001:5000 \
+  -v /LOCALDIRHERE/app/data:/app/data \
+  dwilliamhouston/shodantest:latest datasette -p 5000 -h 0.0.0.0 /app/data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000 --config num_sql_threads:10 --config allow_csv_stream:off --metadata metadata.json
 
   Step 3 - open the browser to http://localhost:5001
   
