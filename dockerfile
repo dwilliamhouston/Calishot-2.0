@@ -18,6 +18,7 @@ RUN export PATH=$PATH:/root/.local/bin && source /root/.bashrc && \
     pipx install --include-deps --force datasette-pretty-json
 
 # Expose a port on the container
+
 EXPOSE 5000
 # Expose a local host directory to the container
 CMD ["/bin/bash", "-c", "/root/.local/bin/datasette -p 5000 -h 0.0.0.0 /app/data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000 --config num_sql_threads:10 --config allow_csv_stream:off --metadata metadata.json"]
