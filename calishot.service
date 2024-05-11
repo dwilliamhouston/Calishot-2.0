@@ -1,0 +1,12 @@
+[Unit]
+Description=calishotserver
+After=network.target nss-lookup.target
+
+[Service]
+PIDFile=/run/calishoot.pid
+ExecStart=sh -c "cd /root/Calishot-2.0 ; /root/Calishot-2.0/run-this-stuff.sh -d"
+TimeoutStopSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
