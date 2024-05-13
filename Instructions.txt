@@ -5,7 +5,8 @@ If you want to use the docker app then do the following:
     pip install -r requirements.txt
     /root/.local/bin/datasette -p 5001 -h 0.0.0.0 data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000 --config num_sql_threads:10 --config allow_csv_stream:off --metadata metadata.json
 
-  If you want to not use the docker program then use this:
+
+If you want to not use the docker program then use this:
 
     pipx install --include-deps --force datasette
     pipx install --include-deps --force datasette-json-html
