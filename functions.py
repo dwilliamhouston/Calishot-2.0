@@ -33,7 +33,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
 global api
-api = shodan.Shodan('<Put Shodan API Here if you want to run this>')
+api = shodan.Shodan('KMdUoMuuW82rGPBg00an7F202OlsGX3q')
 
 global site_conn
 data_dir = "./data/"
@@ -53,9 +53,14 @@ def init_sites_db(dir=data_dir):
     - db (Database): The initialized database object.
 
     """
+    print("Dir = ", dir)
     logging.info("****Setup Sites Database Function****")
-    path = Path(dir) / "sites.db" 
-
+    logging.info("Dir = ", dir)
+    
+    path = Path(dir) / "sites.db"
+    print("Path = ", path) 
+    logging.info("Database Directory = ", path)
+    
     db = Database(path)
     if not "sites" in db.table_names():
         db["sites"].create({
@@ -107,7 +112,7 @@ def save_site(db: Database, site):
     #     db["sites"].insert_all(sites, alter=True,  batch_size=100)
     if not 'uuid' in site: 
         site['uuid']=str(uuid.uuid4())    
-    print(site)
+    print("Site: ",site)
     logging.info("Site: %s", site)
     db["sites"].upsert(site, pk='uuid')
 
@@ -162,6 +167,7 @@ def check_calibre_site(site):
     now=str(datetime.datetime.now())
     ret['last_check']=now 
 
+    print ('URL = ', site['url'])
     api=site['url']+'/ajax/'
     timeout=15
     library=""
@@ -255,7 +261,7 @@ def map_site_from_url(url):
 
     Args:
         url (str): The URL to generate the site map from.
-    
+        country (str): The country the URL belongs to.
     Returns:
         dict: A dictionary containing the generated site map. The dictionary has the following keys:
             - 'url' (str): The modified URL with the path removed.
@@ -264,18 +270,23 @@ def map_site_from_url(url):
     """
     logging.info("****Map Site from URL Function****")
     ret={}
-
-    site=urlparse(url)
-
-    print(site)
-    site=site._replace(path='')
-    logging.info("URL: %s", url)
-    ret['url']=urlunparse(site)
-    logging.info("Hostnames: %s", site.hostname)
-    ret['hostnames']=[site.hostname]
-    logging.info("Port: %s", site.port)
-    ret['ports']=[str(site.port)]
-    return ret
+    print ('*******')
+    print ('URL = ', url)
+    print ('*******')
+    
+    if len(url) > 30:
+        return ret
+    else:
+        site=urlparse(url)
+        print(site)
+        site=site._replace(path='')
+        logging.info("URL: %s", url)
+        ret['url']=urlunparse(site)
+        logging.info("Hostnames: %s", site.hostname)
+        ret['hostnames']=[site.hostname]
+        logging.info("Port: %s", site.port)
+        ret['ports']=[str(site.port)]
+        return ret
 
 ############################################################
 # Import the URLS from the temp file and write to Database #
@@ -2133,6 +2144,8 @@ def calibre_by_country(country):
         print('apiquery= ', apiquery)
         results = api.search(apiquery, limit=40)
         filename = "./data/" + country + ".txt"
+
+        
         csvfile = open(filename, 'w')
         for result in results['matches']:
 #               Check if the server is insecure (not using HTTPS)

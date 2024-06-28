@@ -10,12 +10,12 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.E
 #####################
 # Flags for testing #
 #####################
-run_search_by_country = True
-run_book_search = True
-run_check_calibre_list = True
-run_output_online_db = True
+run_search_by_country = False
+run_book_search = False
+run_check_calibre_list = False
+run_output_online_db = False
 run_index_site_list = True
-run_index_site_list_seq = True
+run_index_site_list_seq = False
 run_build_index_eng = True
 run_get_stats = True
 run_index_to_json = True
@@ -90,6 +90,15 @@ if run_search_by_country:
     calibre_by_country('SK')
     calibre_by_country('UG')
     calibre_by_country('UZ')
+    calibre_by_country('NO')
+    calibre_by_country('KG')
+    calibre_by_country('ET')
+    calibre_by_country('BY')
+    calibre_by_country('BO')
+    calibre_by_country('BD')
+    calibre_by_country('BA')
+    calibre_by_country('AL')
+    
     
 ##############################################
 # Call book_search Function for each Country #
@@ -120,47 +129,55 @@ if run_book_search:
     book_search('RS')
     book_search('HU')
     book_search('TW')
-    book_Search('IN')
-    book_Search('FI')
+    book_search('IN')
+    book_search('FI')
     book_search('KR')
-    book_Search('BE')
-    book_Search('VN')
+    book_search('BE')
+    book_search('VN')
     book_search('ZA')
-    book_Search('AT')
-    book_Search('PT')
-    book_Search('UY')
-    book_Search('RO')
-    book_Search('SG')
-    book_Search('BR')
-    book_Search('CL')
-    book_Search('DK')
-    book_Search('HR')
-    book_Search('MX')
-    book_Search('AR')
-    book_Search('MY')
-    book_Search('IL')
-    book_Search('BG')
-    book_Search('CZ')
-    book_Search('LU')
-    book_Search('UA')
-    book_Search('MK')
-    book_Search('GR')
-    book_Search('MA')
-    book_Search('NG')
-    book_Search('BJ')
-    book_Search('EE')
-    book_Search('GH')
-    book_Search('ID')
-    book_Search('IS')
-    book_Search('JM')
-    book_Search('MO')
-    book_Search('PH')
-    book_Search('PK')
-    book_Search('RW')
-    book_Search('SI')
-    book_Search('SK')
-    book_Search('UG')
-    book_Search('UZ')
+    book_search('AT')
+    book_search('PT')
+    book_search('UY')
+    book_search('RO')
+    book_search('SG')
+    book_search('BR')
+    book_search('CL')
+    book_search('DK')
+    book_search('HR')
+    book_search('MX')
+    book_search('AR')
+    book_search('MY')
+    book_search('IL')
+    book_search('BG')
+    book_search('CZ')
+    book_search('LU')
+    book_search('UA')
+    book_search('MK')
+    book_search('GR')
+    book_search('MA')
+    book_search('NG')
+    book_search('BJ')
+    book_search('EE')
+    book_search('GH')
+    book_search('ID')
+    book_search('IS')
+    book_search('JM')
+    book_search('MO')
+    book_search('PH')
+    book_search('PK')
+    book_search('RW')
+    book_search('SI')
+    book_search('SK')
+    book_search('UG')
+    book_search('UZ')
+    book_search('NO')
+    book_search('KG')
+    book_search('ET')
+    book_search('BY')
+    book_search('BO')
+    book_search('BD')
+    book_search('BA')
+    book_search('AL')
     
 ####################################
 # Call check_calibre_list Function #
@@ -184,7 +201,7 @@ if run_output_online_db:
 if run_index_site_list:
     print ("Running index_site_list...")
     logging.info("Running index_site_list...")
-    index_site_list('/app/data/online.txt')
+    index_site_list('./data/online.txt')
 
 #####################################
 # Call index_site_list_seq Function #
@@ -192,7 +209,7 @@ if run_index_site_list:
 if run_index_site_list_seq:
     print ("Running index_site_list_seq...")
     logging.info("Running index_site_list_seq...")
-    index_site_list_seq('/app/data/online.txt')
+    index_site_list_seq('./data/online.txt')
 
 #################################
 # Call build_index_eng Function #
