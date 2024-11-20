@@ -5,7 +5,7 @@
 Step 1 - Setup new python environemnt and install datasette. 
 python -m venv shodantest
 
-. ./calishot/bin/activate
+. ./shodantest/bin/activate
 pip install datasette
 pip install datasette-json-html
 pip install datasette-pretty-json

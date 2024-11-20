@@ -10,10 +10,10 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.E
 #####################
 # Flags for testing #
 #####################
-run_search_by_country = False
-run_book_search = False
-run_check_calibre_list = False
-run_output_online_db = False
+run_search_by_country = True
+run_book_search = True
+run_check_calibre_list = True
+run_output_online_db = True
 run_index_site_list = True
 run_index_site_list_seq = False
 run_build_index_eng = True
@@ -26,11 +26,11 @@ run_index_to_json = True
 if run_search_by_country:
     print ("Running search_by_country...")
     logging.info("Running search_by_country...")
-    calibre_by_country('AU')
-    calibre_by_country('NZ')
-    calibre_by_country('IE')
-    calibre_by_country('GB')
-    calibre_by_country('CA')
+    #calibre_by_country('AU')
+    #calibre_by_country('NZ')
+    #calibre_by_country('IE')
+    #calibre_by_country('GB')
+    #calibre_by_country('CA')
     calibre_by_country('NL')
     calibre_by_country('DE')
     calibre_by_country('US')
@@ -110,7 +110,7 @@ if run_book_search:
     book_search('NZ')
     book_search('IE')
     book_search('GB')
-    book_search('CA')
+    #book_search('CA')
     book_search('NL')
     book_search('DE')
     book_search('US')
