@@ -33,7 +33,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
 global api
-api = shodan.Shodan('XXXXXX')
+api = shodan.Shodan('sGgC3qPIynA8uN24lbI6bEyLL94qAd8q')
 
 global site_conn
 data_dir = "./data/"
@@ -639,27 +639,27 @@ def index_site_list(file):
 ##########################
 # Index ebooks Exception #
 ##########################
-def index_ebooks_except(site):
-    """
-    Indexes ebooks for a given site, except when an error occurs.
+#def index_ebooks_except(site):
+#    """
+#    Indexes ebooks for a given site, except when an error occurs.
 
-    Args:
-        site (str): The site to index ebooks for.
+#    Args:
+#        site (str): The site to index ebooks for.
 
-    Returns:
-        None
-    """
-    logging.info("****Index ebooks Exception Function****")
-    try:
-        index_ebooks(site)
-    except:
-        print("Error on site")
-        logging.error("Error on site: "+site)
+#    Returns:
+#        None
+#    """
+#    logging.info("****Index ebooks Exception Function****")
+#    try:
+#        index_ebooks(site)
+#    except:
+#        print("Error on site")
+#        logging.error("Error on site: "+site)
 
 ################
 # Index Ebooks #
 ################
-def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
+def index_ebooks(site, library, start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Retrieves ebooks from a site and indexes them into a library.
 
@@ -686,11 +686,14 @@ def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, forc
         logging.error("Error on site (Old Lib): "+site)
         
     _uuid=str(uuid.uuid4())
-    
+    print ('libs = ', libs)
     if libs:
         for lib in libs:
+            print ('lib', lib)
+            print('Index ebooks From Libary', site, ' ', _uuid, ' ', lib, ' ', start, ' ', stop)
             index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
     else:
+            print('Not lib')
             index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
 
 #############################
@@ -758,11 +761,15 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
 
     # cache_db=init_cache_db(dir=dir)
     # _uuid=get_uuid_from_url(cache_db)
+    print('Init database for site:', site )
     db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])
+    print('r_site = ', r_site)
 
     r_site['version']=r.headers['server']
-    r_site['major']=int(re.search('calibre.(\d).*', r.headers['server']).group(1))
+    print('Version =', r_site['version'])
+    r_site['major']=int(re.search('calibre.*', r.headers['server']).group(1))
+    print('Major = ',r_site['major'])
     db["site"].upsert(r_site, pk='uuid')
 
     print()
@@ -1348,7 +1355,7 @@ def index_ebooks_except(site):
 ################
 # Index Ebooks #
 ################
-def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
+def index_ebooks(site, library='', start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Generates a function comment for the given function body.
 
@@ -1366,7 +1373,8 @@ def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, forc
     """
     logging.info("****Index Ebooks Function****")
     #TODO old calibres don't manage libraries.  /ajax/library-info endpoint doesn't exist. It would be better to manage calibre version directly 
-
+    
+    print('Index_Ebooks from ',site + ' ' + library)
     libs=[]
     try:
         libs= get_libs_from_site(site)
@@ -1385,7 +1393,7 @@ def index_ebooks(site, library="", start=0, stop=0, dir=data_dir, num=1000, forc
 #############################
 # Index Ebooks from Library #
 #############################
-def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
+def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
     """
     Indexes ebooks from a library on a specific site.
     
@@ -1407,9 +1415,13 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
     num=min(1000, num)
     server=site.rstrip('/')
     api=server+'/ajax/'
+    print('API = ', api)
     lib=library
+    print('lib', lib)
+    print('library', library)
+    
     library= '/'+library if library else library
-
+    print('library after ', library)
     timeout=15
 
     print(f"\nIndexing library: {lib} from server: {server} ")
@@ -1417,7 +1429,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
     url=api+'search'+library+'?num=0'
     print(f"\nGetting ebooks count of library: {lib} from server:{server} ")
     logging.info("Getting ebooks count of library: %s from server: %s ", lib, server)
-    # print(url)
+    print('URL = ',url)
     
     try:
         r=requests.get(url, verify=False, timeout=(timeout, 30))
@@ -1445,9 +1457,8 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
 
     db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])
-
     r_site['version']=r.headers['server']
-    r_site['major']=int(re.search('calibre.(\d).*', r.headers['server']).group(1))
+    #r_site['major']=int(re.search('calibre.*', r.headers['server']).group(1))
     db["site"].upsert(r_site, pk='uuid')
 
     print()
@@ -2139,14 +2150,15 @@ def calibre_by_country(country):
     """
     logging.info("****Calibre by Country Function****")
     page = 1
-    apiquery = 'calibre http.status:"200" country:"' + country + '"'+ ',limit=50'
+    apiquery = 'calibre http.status:"200" country:"' + country + '"'
     try:
+        print('Country= ', country)
         print('apiquery= ', apiquery)
-        results = api.search(apiquery, limit=40)
         filename = "./data/" + country + ".txt"
 
-        
         csvfile = open(filename, 'w')
+        results = api.search(apiquery, limit=16)
+
         for result in results['matches']:
 #               Check if the server is insecure (not using HTTPS)
                     if 'https' not in result['data']:
