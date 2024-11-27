@@ -33,7 +33,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
 global api
-api = shodan.Shodan('sGgC3qPIynA8uN24lbI6bEyLL94qAd8q')
+api = shodan.Shodan('')
 
 global site_conn
 data_dir = "./data/"
