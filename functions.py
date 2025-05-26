@@ -255,7 +255,7 @@ def get_site_uuid_from_url(db, url):
 ##############################
 # Get URL, hostname and Port #
 ##############################
-def map_site_from_url(url):
+def map_site_from_url(url, country): # Added 'country' parameter
     """
     Generates a site map from a given URL.
 
@@ -267,6 +267,7 @@ def map_site_from_url(url):
             - 'url' (str): The modified URL with the path removed.
             - 'hostnames' (list): A list containing the hostname extracted from the URL.
             - 'ports' (list): A list containing the port number extracted from the URL as a string.
+            - 'country' (str): The country the URL belongs to.
     """
     logging.info("****Map Site from URL Function****")
     ret={}
@@ -286,6 +287,7 @@ def map_site_from_url(url):
         ret['hostnames']=[site.hostname]
         logging.info("Port: %s", site.port)
         ret['ports']=[str(site.port)]
+        ret['country']=country # Added country to the return dictionary
         return ret
 
 ############################################################
@@ -308,17 +310,22 @@ def import_urls_from_file(filepath, dir=data_dir):
     logging.info("***Importing URLs from file Function*** %s", filepath)
     db=init_sites_db(dir)
 
+    # Extract country from filepath
+    # Example: filepath could be "./data/AU.txt" or "US.txt"
+    # We need to get "AU" or "US" from it.
+    country_code = Path(filepath).stem # This gets the filename without extension, e.g., "AU" from "AU.txt"
+
     with open(filepath) as f:
         for url in f.readlines():
             url=url.rstrip()
             # url='http://'+url
             if get_site_uuid_from_url(db, url):
                 logging.info("'%s' already present", url)
-                print(f"'{url}'' already present")
+                # print(f"'{url}'' already present") # Consider removing print, logging is good
                 continue
-            print(f"'{url}'' added")
+            # print(f"'{url}'' added") # Consider removing print
             logging.info("'%s' added", url)
-            save_site(db, map_site_from_url(url))
+            save_site(db, map_site_from_url(url, country_code)) # Pass the extracted country_code
     
 ###################################
 # Get list of libraries from site #
