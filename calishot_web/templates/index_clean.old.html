@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calishot - World Map</title>
+    <!-- Load D3 v3.5.17 which is known to work well with DataMaps -->
+    <style>
+        /* Add any global styles here if needed */
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        #map-container {
+            width: 100%;
+            height: 70vh;
+            min-height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            position: relative;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h1>Calibre Server Map</h1>
+            <button id="debug-btn" style="padding: 5px 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">
+                Toggle Debug
+            </button>
+        </div>
+        
+        <div id="map-container" style="position: relative; width: 100%; height: 70vh; min-height: 500px; border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
+            <div id="loading-message" style="display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); justify-content: center; align-items: center; z-index: 1000;">
+                <div style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.2); text-align: center;">
+                    <div style="font-size: 18px; margin-bottom: 10px;">Loading map data...</div>
+                    <div id="status-message" style="font-size: 14px; color: #666;">Initializing...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="country-info" style="margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px;">
+            <p>Click on a country to see details</p>
+        </div>
+        
+        <div id="debug-panel" style="margin-top: 20px; padding: 15px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; display: none;">
+            <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Debug Information</h3>
+            <div id="debug-content" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #fff; padding: 10px; border: 1px solid #eee; border-radius: 3px;">
+                <div>Initializing debug panel...</div>
+            </div>
+            <div style="margin-top: 10px;">
+                <button id="check-status-btn" style="padding: 5px 10px; margin-right: 5px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Check Status</button>
+                <button id="clear-log-btn" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear Log</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load D3 v3.5.17 which is known to work well with DataMaps -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+    <!-- Load TopoJSON -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.20/topojson.min.js"></script>
+    <!-- Load DataMaps with world map included -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/datamaps/0.5.9/datamaps.world.min.js"></script>
+    <script>
+        // Main application
+        (function() {
+            'use strict';
+            
+            // Global variables
+            let datamap = null;
+            const debugLogs = [];
+            
+            // Main initialization function
+            function initApp() {
+                console.log('Initializing application...');
+                
+                // Show loading message
+                updateStatus('Initializing application...', 'info');
+                
+                // Verify required libraries
+                if (typeof d3 === 'undefined' || typeof topojson === 'undefined' || typeof Datamap === 'undefined') {
+                    showError('Required libraries not loaded. Please check the console for details.');
+                    console.error('Missing required libraries:');
+                    console.log('- D3.js:', typeof d3 !== 'undefined' ? `v${d3.version}` : 'Not loaded');
+                    console.log('- TopoJSON:', typeof topojson !== 'undefined' ? 'Loaded' : 'Not loaded');
+                    console.log('- DataMaps:', typeof Datamap !== 'undefined' ? 'Loaded' : 'Not loaded');
+                    return;
+                }
+                
+                initDebugPanel();
+                initMap();
+                loadData();
+            }
+            
+            // Initialize debug panel
+            function initDebugPanel() {
+                const debugBtn = document.getElementById('debug-btn');
+                const debugPanel = document.getElementById('debug-panel');
+                const checkStatusBtn = document.getElementById('check-status-btn');
+                const clearLogBtn = document.getElementById('clear-log-btn');
+                
+                // Toggle debug panel
+                if (debugBtn && debugPanel) {
+                    debugBtn.addEventListener('click', function() {
+                        debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+                    });
+                }
+                
+                // Check map status
+                if (checkStatusBtn) {
+                    checkStatusBtn.addEventListener('click', checkMapStatus);
+                }
+                
+                // Clear debug log
+                if (clearLogBtn) {
+                    clearLogBtn.addEventListener('click', function() {
+                        const debugContent = document.getElementById('debug-content');
+                        if (debugContent) {
+                            debugContent.innerHTML = '';
+                            debugLogs = [];
+                            logDebug('Log cleared');
+                        }
+                    });
+                }
+                
+                logDebug('Debug panel initialized');
+            }
+            
+            // Log debug messages
+            function logDebug(message, type = 'info') {
+                const timestamp = new Date().toISOString().substr(11, 8);
+                debugLogs.push({ timestamp, message, type });
+                
+                const debugContent = document.getElementById('debug-content');
+                if (debugContent) {
+                    const logElement = document.createElement('div');
+                    logElement.style.marginBottom = '5px';
+                    logElement.style.color = {
+                        'error': '#d32f2f',
+                        'warning': '#ff9800',
+                        'success': '#388e3c',
+                        'info': '#1976d2'
+                    }[type] || '#000';
+                    
+                    logElement.textContent = `[${timestamp}] ${message}`;
+                    debugContent.appendChild(logElement);
+                    debugContent.scrollTop = debugContent.scrollHeight;
+                }
+                
+                // Also log to console
+                const consoleMethod = {
+                    'error': console.error,
+                    'warning': console.warn,
+                    'info': console.log,
+                    'success': console.log
+                }[type] || console.log;
+                
+                consoleMethod(`[${type.toUpperCase()}] ${message}`);
+            }
+            
+            // Show error message
+            function showError(message) {
+                logDebug(`Error: ${message}`, 'error');
+                updateStatus(message, 'error');
+                
+                const container = document.getElementById('map-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div style="color: red; padding: 20px; text-align: center;">
+                            <h3>Error</h3>
+                            <p>${message}</p>
+                            <p>Please check the browser console for details.</p>
+                        </div>`;
+                }
+            }
+            
+            // Update status message
+            function updateStatus(message, type = 'info') {
+                logDebug(`Status: ${message}`, type);
+                const statusElement = document.getElementById('status-message');
+                if (statusElement) {
+                    statusElement.textContent = message;
+                    statusElement.style.color = {
+                        'error': '#d32f2f',
+                        'warning': '#ff9800',
+                        'success': '#388e3c',
+                        'info': '#1976d2'
+                    }[type] || '#000';
+                }
+            }
+            
+            // Check map status
+            function checkMapStatus() {
+                const status = {
+                    d3Loaded: !!window.d3,
+                    d3Version: window.d3 ? window.d3.version : 'Not loaded',
+                    topoJsonLoaded: !!window.topojson,
+                    dataMapsLoaded: !!window.Datamap,
+                    mapInitialized: !!datamap,
+                    windowSize: { 
+                        width: window.innerWidth, 
+                        height: window.innerHeight 
+                    },
+                    mapContainer: {
+                        width: document.getElementById('map-container').offsetWidth,
+                        height: document.getElementById('map-container').offsetHeight
+                    }
+                };
+                
+                logDebug('=== Map Status ===', 'info');
+                logDebug(`D3.js: ${status.d3Loaded ? `v${status.d3Version}` : 'Not loaded'}`);
+                logDebug(`TopoJSON: ${status.topoJsonLoaded ? 'Loaded' : 'Not loaded'}`);
+                logDebug(`DataMaps: ${status.dataMapsLoaded ? 'Loaded' : 'Not loaded'}`);
+                logDebug(`Map Initialized: ${status.mapInitialized ? 'Yes' : 'No'}`);
+                logDebug(`Window Size: ${status.windowSize.width}x${status.windowSize.height}`);
+                logDebug(`Map Container: ${status.mapContainer.width}x${status.mapContainer.height}`);
+                
+                return status;
+            }
+            
+            // Initialize the map
+            function initMap() {
+                logDebug('Initializing map...', 'info');
+                updateStatus('Initializing map...', 'info');
+                
+                const container = document.getElementById('map-container');
+                if (!container) {
+                    const errorMsg = 'Map container not found';
+                    console.error(errorMsg);
+                    showError(errorMsg);
+                    return;
+                }
+                
+                console.log('Map container found:', container);
+                console.log('Datamap library available:', typeof Datamap !== 'undefined');
+                
+                try {
+                    datamap = new Datamap({
+                        element: container,
+                        responsive: true,
+                        fills: {
+                            defaultFill: '#f5f5f5',
+                            high: '#1a9641',
+                            medium: '#a6d96a',
+                            low: '#ffffbf',
+                            unknown: '#d9d9d9'
+                        },
+                        data: {},
+                        geographyConfig: {
+                            highlightOnHover: true,
+                            highlightFillColor: '#1a9641',
+                            highlightBorderColor: '#000000',
+                            highlightBorderWidth: 1,
+                            popupOnHover: true,
+                            popupTemplate: function(geo, data) {
+                                if (!data) {
+                                    return '<div class="hoverinfo">' + geo.properties.name + ': No data';
+                                }
+                                return [
+                                    '<div class="hoverinfo">',
+                                    '<strong>', geo.properties.name, '</strong><br/>',
+                                    'Servers: <b>', data.count || 0, '</b>',
+                                    '</div>'
+                                ].join('');
+                            }
+                        },
+                        done: function(datamap) {
+                            logDebug('Map initialized successfully', 'success');
+                            updateStatus('Map ready', 'success');
+                        }
+                    });
+                    
+                    // Handle window resize
+                    window.addEventListener('resize', function() {
+                        if (datamap) {
+                            datamap.resize();
+                        }
+                    });
+                    
+                } catch (error) {
+                    showError(`Error initializing map: ${error.message}`);
+                }
+            }
+            
+            // Load data from the API
+            function loadData() {
+                logDebug('Loading data from API...', 'info');
+                updateStatus('Loading server data...', 'info');
+                
+                fetch('/api/country_counts')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        logDebug(`Received data for ${Object.keys(data).length} countries`, 'success');
+                        updateMap(data);
+                    })
+                    .catch(error => {
+                        showError(`Error loading data: ${error.message}`);
+                    });
+            }
+            
+            // Update the map with country data
+            function updateMap(countryData) {
+                if (!datamap) {
+                    showError('Map not initialized');
+                    return;
+                }
+                
+                logDebug('Updating map with country data...', 'info');
+                
+                try {
+                    // Prepare data for the map
+                    const mapData = {};
+                    let maxCount = 0;
+                    
+                    // Find the maximum count for color scaling
+                    Object.values(countryData).forEach(count => {
+                        if (count > maxCount) maxCount = count;
+                    });
+                    
+                    // Prepare the data object for the map
+                    Object.entries(countryData).forEach(([countryCode, count]) => {
+                        mapData[countryCode] = {
+                            fillKey: getFillKey(count, maxCount),
+                            count: count
+                        };
+                    });
+                    
+                    // Update the map
+                    datamap.updateChoropleth(mapData);
+                    logDebug('Map updated successfully', 'success');
+                    updateStatus('Map updated', 'success');
+                    
+                } catch (error) {
+                    showError(`Error updating map: ${error.message}`);
+                }
+            }
+            
+            // Helper function to determine fill color based on count
+            function getFillKey(count, max) {
+                if (!count) return 'defaultFill';
+                if (!max) return 'unknown';
+                
+                const ratio = count / max;
+                
+                if (ratio > 0.7) return 'high';
+                if (ratio > 0.3) return 'medium';
+                return 'low';
+            }
+            
+            // Expose functions to global scope for debugging
+            window.debugMap = {
+                checkStatus: checkMapStatus,
+                reloadData: loadData,
+                getMap: () => datamap,
+                showLogs: () => console.log(debugLogs)
+            };
+            
+            // Initialize the application when the DOM is fully loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initApp);
+            } else {
+                initApp();
+            
+        })();
+    </script>
+</body>
+</html>
+
+<!-- Load D3 v3.5.17 which is known to work well with DataMaps -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+<!-- Load TopoJSON -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.20/topojson.min.js"></script>
+<!-- Load DataMaps with world map included -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datamaps/0.5.9/datamaps.world.min.js"></script>
+
+<script>
+    // Main application
+    (function() {
+        'use strict';
+        
+        // Global variables
+        let datamap = null;
+        const debugLogs = [];
+        
+        // Main initialization function
+        function initApp() {
+            console.log('Initializing application...');
+        // Main application
+        (function() {
+            'use strict';
+            
+            // Global variables
+            let datamap = null;
+            const debugLogs = [];
+            
+            // Main initialization function
+            function initApp() {
+                console.log('Initializing application...');
+                
+                // Show loading message
+                updateStatus('Initializing application...', 'info');
+                
+                // Verify required libraries
+                if (typeof d3 === 'undefined' || typeof topojson === 'undefined' || typeof Datamap === 'undefined') {
+                    showError('Required libraries not loaded. Please check the console for details.');
+                    console.error('Missing required libraries:');
+                    console.log('- D3.js:', typeof d3 !== 'undefined' ? `v${d3.version}` : 'Not loaded');
+                    console.log('- TopoJSON:', typeof topojson !== 'undefined' ? 'Loaded' : 'Not loaded');
+                    console.log('- DataMaps:', typeof Datamap !== 'undefined' ? 'Loaded' : 'Not loaded');
+                    return;
+                }
+                
+                initDebugPanel();
+                initMap();
+                loadData();
+            }

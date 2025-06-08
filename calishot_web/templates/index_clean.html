@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calibre Server Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f8f8f8;
+            overflow: hidden;
+        }
+        #main-wrapper {
+            width: 100vw;
+            height: 100vh;
+            min-height: 0;
+            min-width: 0;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            overflow: hidden;
+        }
+        #map-container {
+            flex: 1 1 auto;
+            width: 100vw;
+            height: 100%;
+            min-height: 0;
+            min-width: 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            position: relative;
+            transition: height 0.2s;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-wrapper">
+        <div id="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h1>Calibre Server Map</h1>
+            </div>
+        </div>
+        <div style="flex:1 1 auto; display: flex; flex-direction: row; min-height:0; min-width:0; overflow:hidden;">
+            <div id="map-container" style="flex: 2 1 0; min-width:0; min-height:0;"></div>
+            <div id="data-table-wrapper" style="flex:1 1 300px; max-width:400px; min-width:220px; background:#fff; border-left:1px solid #eee; overflow-y:auto; padding:16px 10px 16px 16px; display:none;">
+                <div style="margin-bottom: 15px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                        <div style="width: 12px; height: 12px; background-color: #0000ff; margin-right: 6px; border-radius: 2px;"></div>
+                        <span>High server count</span>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                        <div style="width: 12px; height: 12px; background-color: #0099ff; margin-right: 6px; border-radius: 2px;"></div>
+                        <span>Medium server count</span>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <div style="width: 12px; height: 12px; background-color: #00ff33; margin-right: 6px; border-radius: 2px;"></div>
+                        <span>Low server count</span>
+                    </div>
+                </div>
+                <h3 style="margin-top:0;font-size:18px;">Server Counts by Country</h3>
+                <table id="country-table" style="width:100%; border-collapse:collapse; font-size:15px;">
+                    <thead>
+                        <tr style="background:#f3f3f3;">
+                            <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #ddd;">Country</th>
+                            <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #ddd;">Servers</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data rows inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load D3 v3.5.17 which is known to work well with DataMaps -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+    <!-- Load TopoJSON -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.20/topojson.min.js"></script>
+    <!-- Load DataMaps with world map included -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/datamaps/0.5.9/datamaps.world.min.js"></script>
+    
+    <script>
+    // Main application
+    (function() {
+        'use strict';
+        // Error and status display functions (must be at top)
+        function updateStatus(message, level = 'info') {
+            const status = document.getElementById('status-message');
+            if (status) {
+                status.textContent = message;
+                status.className = level;
+            }
+        }
+        function showError(message) {
+            const status = document.getElementById('status-message');
+            if (status) {
+                status.textContent = message;
+                status.style.color = '#d32f2f';
+            }
+            console.error(message);
+        }
+        // Global variables
+        let datamap = null;
+        
+        // ISO 3166-1 alpha-2 to alpha-3 country code mapping
+        const countryCodeMap = {
+            'AF': 'AFG', 'AX': 'ALA', 'AL': 'ALB', 'DZ': 'DZA', 'AS': 'ASM', 'AD': 'AND', 'AO': 'AGO',
+            'AI': 'AIA', 'AQ': 'ATA', 'AG': 'ATG', 'AR': 'ARG', 'AM': 'ARM', 'AW': 'ABW', 'AU': 'AUS',
+            'AT': 'AUT', 'AZ': 'AZE', 'BS': 'BHS', 'BH': 'BHR', 'BD': 'BGD', 'BB': 'BRB', 'BY': 'BLR',
+            'BE': 'BEL', 'BZ': 'BLZ', 'BJ': 'BEN', 'BM': 'BMU', 'BT': 'BTN', 'BO': 'BOL', 'BQ': 'BES',
+            'BA': 'BIH', 'BW': 'BWA', 'BV': 'BVT', 'BR': 'BRA', 'IO': 'IOT', 'BN': 'BRN', 'BG': 'BGR',
+            'BF': 'BFA', 'BI': 'BDI', 'CV': 'CPV', 'KH': 'KHM', 'CM': 'CMR', 'CA': 'CAN', 'KY': 'CYM',
+            'CF': 'CAF', 'TD': 'TCD', 'CL': 'CHL', 'CN': 'CHN', 'CX': 'CXR', 'CC': 'CCK', 'CO': 'COL',
+            'KM': 'COM', 'CG': 'COG', 'CD': 'COD', 'CK': 'COK', 'CR': 'CRI', 'CI': 'CIV', 'HR': 'HRV',
+            'CU': 'CUB', 'CW': 'CUW', 'CY': 'CYP', 'CZ': 'CZE', 'DK': 'DNK', 'DJ': 'DJI', 'DM': 'DMA',
+            'DO': 'DOM', 'EC': 'ECU', 'EG': 'EGY', 'SV': 'SLV', 'GQ': 'GNQ', 'ER': 'ERI', 'EE': 'EST',
+            'SZ': 'SWZ', 'ET': 'ETH', 'FK': 'FLK', 'FO': 'FRO', 'FJ': 'FJI', 'FI': 'FIN', 'FR': 'FRA',
+            'GF': 'GUF', 'PF': 'PYF', 'TF': 'ATF', 'GA': 'GAB', 'GM': 'GMB', 'GE': 'GEO', 'DE': 'DEU',
+            'GH': 'GHA', 'GI': 'GIB', 'GR': 'GRC', 'GL': 'GRL', 'GD': 'GRD', 'GP': 'GLP', 'GU': 'GUM',
+            'GT': 'GTM', 'GG': 'GGY', 'GN': 'GIN', 'GW': 'GNB', 'GY': 'GUY', 'HT': 'HTI', 'HM': 'HMD',
+            'VA': 'VAT', 'HN': 'HND', 'HK': 'HKG', 'HU': 'HUN', 'IS': 'ISL', 'IN': 'IND', 'ID': 'IDN',
+            'IR': 'IRN', 'IQ': 'IRQ', 'IE': 'IRL', 'IM': 'IMN', 'IL': 'ISR', 'IT': 'ITA', 'JM': 'JAM',
+            'JP': 'JPN', 'JE': 'JEY', 'JO': 'JOR', 'KZ': 'KAZ', 'KE': 'KEN', 'KI': 'KIR', 'KP': 'PRK',
+            'KR': 'KOR', 'KW': 'KWT', 'KG': 'KGZ', 'LA': 'LAO', 'LV': 'LVA', 'LB': 'LBN', 'LS': 'LSO',
+            'LR': 'LBR', 'LY': 'LBY', 'LI': 'LIE', 'LT': 'LTU', 'LU': 'LUX', 'MO': 'MAC', 'MG': 'MDG',
+            'MW': 'MWI', 'MY': 'MYS', 'MV': 'MDV', 'ML': 'MLI', 'MT': 'MLT', 'MH': 'MHL', 'MQ': 'MTQ',
+            'MR': 'MRT', 'MU': 'MUS', 'YT': 'MYT', 'MX': 'MEX', 'FM': 'FSM', 'MD': 'MDA', 'MC': 'MCO',
+            'MN': 'MNG', 'ME': 'MNE', 'MS': 'MSR', 'MA': 'MAR', 'MZ': 'MOZ', 'MM': 'MMR', 'NA': 'NAM',
+            'NR': 'NRU', 'NP': 'NPL', 'NL': 'NLD', 'NC': 'NCL', 'NZ': 'NZL', 'NI': 'NIC', 'NE': 'NER',
+            'NG': 'NGA', 'NU': 'NIU', 'NF': 'NFK', 'MK': 'MKD', 'MP': 'MNP', 'NO': 'NOR', 'OM': 'OMN',
+            'PK': 'PAK', 'PW': 'PLW', 'PS': 'PSE', 'PA': 'PAN', 'PG': 'PNG', 'PY': 'PRY', 'PE': 'PER',
+            'PH': 'PHL', 'PN': 'PCN', 'PL': 'POL', 'PT': 'PRT', 'PR': 'PRI', 'QA': 'QAT', 'RE': 'REU',
+            'RO': 'ROU', 'RU': 'RUS', 'RW': 'RWA', 'BL': 'BLM', 'SH': 'SHN', 'KN': 'KNA', 'LC': 'LCA',
+            'MF': 'MAF', 'PM': 'SPM', 'VC': 'VCT', 'WS': 'WSM', 'SM': 'SMR', 'ST': 'STP', 'SA': 'SAU',
+            'SN': 'SEN', 'RS': 'SRB', 'SC': 'SYC', 'SL': 'SLE', 'SG': 'SGP', 'SX': 'SXM', 'SK': 'SVK',
+            'SI': 'SVN', 'SB': 'SLB', 'SO': 'SOM', 'ZA': 'ZAF', 'GS': 'SGS', 'SS': 'SSD', 'ES': 'ESP',
+            'LK': 'LKA', 'SD': 'SDN', 'SR': 'SUR', 'SJ': 'SJM', 'SE': 'SWE', 'CH': 'CHE', 'SY': 'SYR',
+            'TW': 'TWN', 'TJ': 'TJK', 'TZ': 'TZA', 'TH': 'THA', 'TL': 'TLS', 'TG': 'TGO', 'TK': 'TKL',
+            'TO': 'TON', 'TT': 'TTO', 'TN': 'TUN', 'TR': 'TUR', 'TM': 'TKM', 'TC': 'TCA', 'TV': 'TUV',
+            'UG': 'UGA', 'UA': 'UKR', 'AE': 'ARE', 'GB': 'GBR', 'US': 'USA', 'UM': 'UMI', 'UY': 'URY',
+            'UZ': 'UZB', 'VU': 'VUT', 'VE': 'VEN', 'VN': 'VNM', 'VG': 'VGB', 'VI': 'VIR', 'WF': 'WLF',
+            'EH': 'ESH', 'YE': 'YEM', 'ZM': 'ZMB', 'ZW': 'ZWE'
+        };
+        
+        // Main initialization function
+        function initApp() {
+            console.log('Initializing application...');
+            
+            // Show loading message
+            updateStatus('Initializing application...', 'info');
+            
+            // Verify required libraries
+            if (typeof d3 === 'undefined' || typeof topojson === 'undefined' || typeof Datamap === 'undefined') {
+                showError('Required libraries not loaded. Please check the console for details.');
+                console.error('Missing required libraries:');
+                console.log('- D3.js:', typeof d3 !== 'undefined' ? `v${d3.version}` : 'Not loaded');
+                console.log('- TopoJSON:', typeof topojson !== 'undefined' ? 'Loaded' : 'Not loaded');
+                console.log('- DataMaps:', typeof Datamap !== 'undefined' ? 'Loaded' : 'Not loaded');
+                return;
+            }
+            
+            initMap();
+            loadData();
+        }
+        
+        // Initialize the map
+        function initMap() {
+            updateStatus('Initializing map...', 'info');
+            
+            const container = document.getElementById('map-container');
+            if (!container) {
+                const errorMsg = 'Map container not found';
+                console.error(errorMsg);
+                showError(errorMsg);
+                return;
+            }
+            
+            // Ensure container has dimensions
+            container.style.width = '100%';
+            container.style.height = '70vh';
+            container.style.minHeight = '500px';
+            
+            try {
+                datamap = new Datamap({
+                    element: container,
+                    responsive: true,
+                    projection: 'mercator', // Ensure we're using mercator projection
+                    setProjection: function(element) {
+                        const projection = d3.geo.mercator()
+                            .center([20, -40]) // Move map left (first number) and up (second number)
+                            .scale(150)
+                            .translate([element.offsetWidth / 2.5, element.offsetHeight / 2.5]); // Adjust translate to move map up and left
+                        const path = d3.geo.path().projection(projection);
+                        return { path: path, projection: projection };
+                    },
+                    fills: {
+                        defaultFill: '#e6f2ff',
+                        high: '#0000ff',
+                        medium: '#0099ff',
+                        low: '#00ff33',
+                        unknown: '#d9d9d9'
+                    },
+                    data: {},
+                    geographyConfig: {
+                        highlightOnHover: true,
+                        highlightFillColor: '#1a9641',
+                        highlightBorderColor: '#000000',
+                        highlightBorderWidth: 1,
+                        popupOnHover: true,
+                        popupTemplate: function(geo, data) {
+                            if (!data) {
+                                return '<div class="hoverinfo">' + geo.properties.name + ': No data';
+                            }
+                            return [
+                                '<div class="hoverinfo">',
+                                '<strong>', geo.properties.name, '</strong><br/>',
+                                'Servers: <b>', data.count || 0, '</b>',
+                                '</div>'
+                            ].join('');
+                        }
+                    },
+                    done: function(datamap) {
+                        updateStatus('Map ready', 'success');
+                    }
+                });
+                
+            } catch (error) {
+                showError(`Error initializing map: ${error.message}`);
+            }
+        }
+        
+        // Load data from the API
+        function loadData() {
+            updateStatus('Loading server data...', 'info');
+            
+            fetch('/api/country_counts')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    updateMap(data);
+                })
+                .catch(error => {
+                    const errorMsg = `Error loading data: ${error.message}`;
+                    console.error(errorMsg, error);
+                    showError(errorMsg);
+                });
+        }
+        
+        // Update the map with country data
+        function updateMap(countryData) {
+            if (!datamap) {
+                showError('Map not initialized');
+                return;
+            }
+            
+            updateStatus('Updating map...', 'info');
+            
+            // Convert alpha-2 codes to alpha-3 for DataMaps
+            const mapData = {};
+            const countryRows = [];
+            
+            // Find the maximum count for color scaling
+            const maxCount = Math.max(...Object.values(countryData));
+            
+            Object.entries(countryData).forEach(([alpha2, count]) => {
+                const alpha3 = countryCodeMap[alpha2];
+                if (alpha3) {
+                    mapData[alpha3] = { 
+                        count: count, 
+                        fillKey: getFillKey(count, maxCount) 
+                    };
+                    countryRows.push({
+                        code: alpha2,
+                        count: count
+                    });
+                }
+            });
+            datamap.updateChoropleth(mapData);
+            updateStatus('Map updated', 'success');
+            updateCountryTable(countryRows);
+        }
+
+        // Update the country table with server data
+        function updateCountryTable(rows) {
+            const wrapper = document.getElementById('data-table-wrapper');
+            const tbody = document.querySelector('#country-table tbody');
+            if (!wrapper || !tbody) return;
+            // Only show table if there is data
+            if (rows.length > 0) {
+                wrapper.style.display = '';
+            } else {
+                wrapper.style.display = 'none';
+            }
+            // Sort by server count descending
+            rows.sort((a, b) => b.count - a.count);
+            tbody.innerHTML = rows.map(row =>
+                `<tr><td style='padding:4px 8px;'>${row.code}</td><td style='text-align:right;padding:4px 8px;'>${row.count}</td></tr>`
+            ).join('');
+        }
+        
+        // Helper function to determine fill color based on count
+        function getFillKey(count, max) {
+            if (!count || count === 0) return 'defaultFill';
+            if (count <= 0) return 'defaultFill';  // Handle negative numbers
+            if (max <= 0) return 'defaultFill';    // Handle invalid max
+            
+            const ratio = count / max;
+            if (ratio <= 0.2) return 'low';
+            if (ratio <= 0.7) return 'medium';
+            return 'high';
+        }
+        
+        // Timeout for loading map/data
+        let loadTimeout = setTimeout(() => {
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) loadingMessage.style.display = 'none';
+            showError('Map failed to load. Please check your connection, server status, or browser console for errors.');
+        }, 8000);
+
+        // Wrap initApp to clear timeout on success
+        function safeInitApp() {
+            try {
+                initApp();
+                // Hide loading when map/data loads
+                const loadingMessage = document.getElementById('loading-message');
+                if (loadingMessage) loadingMessage.style.display = 'none';
+                clearTimeout(loadTimeout);
+            } catch (err) {
+                showError('Error initializing map: ' + (err && err.message ? err.message : err));
+                clearTimeout(loadTimeout);
+            }
+        }
+
+        // Initialize the application when the DOM is fully loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', safeInitApp);
+        } else {
+            safeInitApp();
+        }
+    })();
+    </script>
+</body>
+</html>
