@@ -33,7 +33,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.D
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
 global api
-api = shodan.Shodan('')
+api = shodan.Shodan('sGgC3qPIynA8uN24lbI6bEyLL94qAd8q')
 
 global site_conn
 data_dir = "./data/"
@@ -51,40 +51,56 @@ def init_sites_db(dir=data_dir):
 
     Returns:
     - db (Database): The initialized database object.
-
     """
-    print("Dir = ", dir)
+    print("Initializing sites database in directory:", dir)
     logging.info("****Setup Sites Database Function****")
-    logging.info("Dir = ", dir)
+    logging.info("Directory: %s", dir)
+    
+    # Create the directory if it doesn't exist
+    Path(dir).mkdir(parents=True, exist_ok=True)
     
     path = Path(dir) / "sites.db"
-    print("Path = ", path) 
-    logging.info("Database Directory = ", path)
+    print("Database path:", path) 
+    logging.info("Database path: %s", path)
     
+    # Initialize the database
     db = Database(path)
-    if not "sites" in db.table_names():
-        db["sites"].create({
+    
+    # Define the schema for the sites table
+    sites_schema = {
         "uuid": str,
         "url": str,
         "hostnames": str,
         "ports": str,
-        "country": str,
+        "country": str,  # Ensure country is in the schema
         "isp": str,
         "status": str,
         "last_online": str,
         "last_check": str,
         "error": int,
-    #     "schema_version": 1
-    #     # TODO: add the most common formats
-        }, pk="uuid")
-        # }, pk="uuid", not_null=True)
-
-    # if not "sites" in db.table_names():
-    #     db["sites"].create({
-    #     "uuid": str
-    #     }, pk="uuid",)
-
-    db.table("sites", pk='uuid', batch_size=100, alter=True)
+    }
+    
+    # Create the table if it doesn't exist
+    if "sites" not in db.table_names():
+        print("Creating new 'sites' table with schema:", sites_schema)
+        logging.info("Creating new 'sites' table")
+        db["sites"].create(sites_schema, pk="uuid")
+        print("Successfully created 'sites' table")
+    else:
+        print("'sites' table already exists")
+        # Ensure all columns exist in the table
+        table = db["sites"]
+        for column, col_type in sites_schema.items():
+            if column not in table.columns_dict:
+                print(f"Adding missing column '{column}' to 'sites' table")
+                logging.info("Adding missing column '%s' to 'sites' table", column)
+                table.add_column(column, col_type)
+    
+    # Enable WAL mode for better concurrency
+    db.conn.execute('PRAGMA journal_mode=WAL;')
+    
+    print("Database initialization complete")
+    logging.info("Database initialization complete")
     return db
 
 ########################################
@@ -96,25 +112,45 @@ def save_site(db: Database, site):
 
     Parameters:
     - db (Database): The database object to save the site to.
-    - site (dict): The site to be saved.
+    - site (dict): The site to be saved. Should include 'url' and may include 'country'.
 
-    This function saves a site to the specified database. If the site does not have a 'uuid' key, a new UUID will be generated and assigned to the site before saving it. The site is saved using the 'upsert' method of the database object, with the primary key set to 'uuid'.
+    This function saves a site to the specified database. If the site does not have a 'uuid' key, 
+    a new UUID will be generated and assigned to the site before saving it. The site is saved using 
+    the 'upsert' method of the database object, with the primary key set to 'uuid'.
 
     Returns:
     - None
-
     """
     logging.info("****Save Site Function****")
-
-
-    # # TODO: Check if the site is not alreday present
-    # def save_sites(db, sites):
-    #     db["sites"].insert_all(sites, alter=True,  batch_size=100)
-    if not 'uuid' in site: 
-        site['uuid']=str(uuid.uuid4())    
-    print("Site: ",site)
-    logging.info("Site: %s", site)
-    db["sites"].upsert(site, pk='uuid')
+    
+    # Ensure the site has a UUID
+    if 'uuid' not in site:
+        site['uuid'] = str(uuid.uuid4())
+    
+    # Log the site data being saved
+    logging.info("Saving site with data: %s", site)
+    print(f"Saving site: {site}")
+    
+    try:
+        # Ensure the sites table has the country column
+        if 'sites' in db.table_names():
+            table = db['sites']
+            # Check if country column exists
+            if 'country' not in table.columns_dict:
+                logging.warning("Country column not found in sites table, altering table...")
+                table.add_column('country', str)
+        
+        # Perform the upsert
+        db["sites"].upsert(site, pk='uuid')
+        logging.info("Successfully saved site with UUID: %s", site['uuid'])
+        
+        # Verify the data was saved correctly
+        saved_site = db["sites"].get(site['uuid'])
+        logging.info("Retrieved saved site: %s", saved_site)
+        
+    except Exception as e:
+        logging.error("Error saving site to database: %s", str(e))
+        raise
 
 
 ##########################
@@ -255,19 +291,19 @@ def get_site_uuid_from_url(db, url):
 ##############################
 # Get URL, hostname and Port #
 ##############################
-def map_site_from_url(url, country): # Added 'country' parameter
+def map_site_from_url(url, country=None):
     """
     Generates a site map from a given URL.
 
     Args:
         url (str): The URL to generate the site map from.
-        country (str): The country the URL belongs to.
+        country (str, optional): The country code for the site. Defaults to None.
     Returns:
         dict: A dictionary containing the generated site map. The dictionary has the following keys:
             - 'url' (str): The modified URL with the path removed.
             - 'hostnames' (list): A list containing the hostname extracted from the URL.
             - 'ports' (list): A list containing the port number extracted from the URL as a string.
-            - 'country' (str): The country the URL belongs to.
+            - 'country' (str): The country code for the site.
     """
     logging.info("****Map Site from URL Function****")
     ret={}
@@ -287,45 +323,56 @@ def map_site_from_url(url, country): # Added 'country' parameter
         ret['hostnames']=[site.hostname]
         logging.info("Port: %s", site.port)
         ret['ports']=[str(site.port)]
-        ret['country']=country # Added country to the return dictionary
+        if country:
+            ret['country'] = country
         return ret
 
 ############################################################
 # Import the URLS from the temp file and write to Database #
 ############################################################
-def import_urls_from_file(filepath, dir=data_dir):
+def import_urls_from_file(filepath, dir=data_dir, country=None):
     """
     Import URLs from a file and add them to a sites database.
 
     Args:
         filepath (str): The path to the file containing the URLs.
         dir (str, optional): The directory where the sites database is located. Defaults to '.'.
-
+        country (str, optional): The country code for the sites being imported. Defaults to None.
     Returns:
         None
     """
-
-    #TODO skip malformed urls
-    #TODO use cache instead
-    logging.info("***Importing URLs from file Function*** %s", filepath)
-    db=init_sites_db(dir)
-
-    # Extract country from filepath
-    # Example: filepath could be "./data/AU.txt" or "US.txt"
-    # We need to get "AU" or "US" from it.
-    country_code = Path(filepath).stem # This gets the filename without extension, e.g., "AU" from "AU.txt"
-
+    logging.info("***Importing URLs from file Function***")
+    logging.info("File: %s, Country: %s", filepath, country)
+    
+    db = init_sites_db(dir)
+    
     with open(filepath) as f:
         for url in f.readlines():
-            url=url.rstrip()
-            # url='http://'+url
-            if get_site_uuid_from_url(db, url):
-                logging.info("'%s' already present", url)
-                # print(f"'{url}'' already present") # Consider removing print, logging is good
+            url = url.rstrip()
+            if not url:
                 continue
-            # print(f"'{url}'' added") # Consider removing print
-            logging.info("'%s' added", url)
-            save_site(db, map_site_from_url(url, country_code)) # Pass the extracted country_code
+                
+            logging.info("Processing URL: %s", url)
+            
+            # Check if URL already exists
+            if get_site_uuid_from_url(db, url):
+                logging.info("'%s' already present in database", url)
+                print(f"'{url}' already present")
+                continue
+                
+            # Map the URL to a site object
+            site_data = map_site_from_url(url, country=country)
+            logging.info("Mapped site data: %s", site_data)
+            
+            if not site_data:
+                logging.warning("Skipping invalid URL: %s", url)
+                continue
+                
+            # Add the site to the database
+            print(f"Adding '{url}' with country: {country}")
+            logging.info("Saving site: %s", site_data)
+            save_site(db, site_data)
+            logging.info("Successfully saved site: %s", url)
     
 ###################################
 # Get list of libraries from site #
@@ -775,7 +822,7 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
 
     r_site['version']=r.headers['server']
     print('Version =', r_site['version'])
-    r_site['major']=int(re.search('calibre.*', r.headers['server']).group(1))
+    r_site['major']=int(re.search(r'calibre.(\d).*', r.headers['server']).group(1))
     print('Major = ',r_site['major'])
     db["site"].upsert(r_site, pk='uuid')
 
@@ -1465,7 +1512,7 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
     db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])
     r_site['version']=r.headers['server']
-    #r_site['major']=int(re.search('calibre.*', r.headers['server']).group(1))
+    r_site['major']=int(re.search(r'calibre.(\d).*', r.headers['server']).group(1))
     db["site"].upsert(r_site, pk='uuid')
 
     print()
@@ -1852,7 +1899,7 @@ def build_index(dir=data_dir):
             db = Database(p.resolve())
         except:
             print ("Pb with:", f)
-            logging.info("Pb with:", f)
+            logging.info("Pb with: %s", f)
         dbs.append(db)
     
     db_index = init_index_db(dir=dir)
@@ -2119,7 +2166,7 @@ def diff(old, new, dir=data_dir, ):
     for i, n_book in enumerate(db_new["summary"].rows):
         n_uuid = n_book['uuid']
         print(i, n_uuid)
-        logging.info(i, n_uuid)
+        logging.info("%s %s", i, n_uuid)
         try:
             o_book = db_old["summary"].get(n_uuid)
             # print(n_uuid, '=OK')
@@ -2127,7 +2174,7 @@ def diff(old, new, dir=data_dir, ):
             n_loc=json.loads(n_book['title'])['href']
             if o_loc != n_loc :
                 print(n_uuid, 'MOVED')
-                logging.info(n_uuid, 'MOVED')
+                logging.info("%s MOVED", n_uuid)
                 n_book["status"]="MOVED"
                 n_book["old_location"]=o_loc
                 n_book.pop ('cover', None)
@@ -2135,55 +2182,123 @@ def diff(old, new, dir=data_dir, ):
         except:
             # print(n_uuid, '=NOK')
             n_book.pop ('cover', None)
-            logging.error(n_uuid, '=NOK')
+            logging.error("%s =NOK", n_uuid)
             n_book["status"]="NEW"
-            logging.error(n_uuid, 'NEW')
+            logging.error("%s NEW", n_uuid)
             db_diff["summary"].insert(n_book, pk='uuid')
-            logging.error(n_uuid, 'inserted')
+            logging.error("%s inserted", n_uuid)
 
 
 ############################
 # Query Calibre by Country #
 ############################
-def calibre_by_country(country):
+def calibre_by_country(country, max_servers=1000, max_retries=3):
     """
     Generates a list of web-Calibre servers by country and saves them to a file.
 
     Args:
         country (str): The country for which to generate the list of web-Calibre servers.
+        max_servers (int): Maximum number of servers to return. Default is 100.
+        max_retries (int): Maximum number of retry attempts for API calls. Default is 3.
 
     Returns:
         None
     """
     logging.info("****Calibre by Country Function****")
+    apiquery = 'calibre http.status:200 has_ipv6:false has_ssl:false ssl.cert.expired:false has_screenshot:false country:"' + country + '"'
+    filename = "./data/" + country + ".txt"
+    servers_found = 0
     page = 1
-    apiquery = 'calibre http.status:"200" country:"' + country + '"'
+    
+    print(f"Searching for up to {max_servers} Calibre servers in {country}")
+    logging.info("Starting search for country: %s", country)
+    
+    # Ensure the data directory exists
+    Path("./data").mkdir(exist_ok=True)
+    
     try:
-        print('Country= ', country)
-        print('apiquery= ', apiquery)
-        filename = "./data/" + country + ".txt"
-
-        csvfile = open(filename, 'w')
-        results = api.search(apiquery, limit=16)
-
-        for result in results['matches']:
-#               Check if the server is insecure (not using HTTPS)
-                    if 'https' not in result['data']:
-                        print(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
-                        logging.info(f"Insecure Web-Calibre server found: {result['ip_str']}:{result['port']} in {result['location']['country_name']}")
-                        ipaddress = str(result['ip_str'])
-                        port = str(result['port'])
-                        server_row = 'http://' + ipaddress + ':' + port + '\n'
-                        print(server_row)
-                        logging.info(server_row)
-                        # Add the server to the servers table
-                        #site_cursor.execute("INSERT OR IGNORE INTO sites VALUES (url, hostnames,ports, country)", server_row, ipaddress, port, country)
-                        csvfile.write(server_row)
-    except shodan.APIError as e:
-        print ('Error: %s' % e)
-        logging.error('Error: %s' % e)
-    csvfile.close()
-    import_urls_from_file(filename)
+        with open(filename, 'w') as csvfile:
+            while servers_found < max_servers:
+                retry_count = 0
+                success = False
+                
+                while retry_count <= max_retries and not success:
+                    try:
+                        # Add a small delay between API calls
+                        if retry_count > 0:
+                            delay = 2 ** retry_count  # Exponential backoff
+                            print(f"Waiting {delay} seconds before retry...")
+                            time.sleep(delay)
+                        
+                        print(f"Querying Shodan API (page {page}, attempt {retry_count + 1}/{max_retries + 1})")
+                        results = api.search(apiquery, page=page)
+                        success = True
+                        
+                    except (shodan.APIError, json.JSONDecodeError) as e:
+                        retry_count += 1
+                        if retry_count > max_retries:
+                            print(f"Error: Max retries reached for page {page}")
+                            logging.error("Max retries reached for page %d: %s", page, str(e))
+                            raise
+                        print(f"Error on page {page}, retrying... ({retry_count}/{max_retries})")
+                        logging.warning("Error on page %d (attempt %d): %s", page, retry_count, str(e))
+                    except Exception as e:
+                        print(f"Unexpected error: {str(e)}")
+                        logging.error("Unexpected error: %s", str(e))
+                        raise
+                
+                if not success:
+                    break
+                
+                if not results.get('matches'):
+                    print("No more results found.")
+                    break
+                
+                for result in results['matches']:
+                    if servers_found >= max_servers:
+                        break
+                        
+                    try:
+                        # Check if the server is insecure (not using HTTPS)
+                        if 'https' not in result.get('data', ''):
+                            ip = result.get('ip_str', 'unknown')
+                            port = str(result.get('port', 'unknown'))
+                            country_name = result.get('location', {}).get('country_name', 'unknown')
+                            
+                            server_row = f"http://{ip}:{port}\n"
+                            
+                            # Log and write the server
+                            print(f"Found server {servers_found + 1}/{max_servers}: {server_row.strip()}")
+                            logging.info("Found server: %s in %s", server_row.strip(), country_name)
+                            
+                            csvfile.write(server_row)
+                            csvfile.flush()  # Ensure data is written to disk
+                            servers_found += 1
+                            
+                    except Exception as e:
+                        logging.error("Error processing server result: %s", str(e))
+                        continue
+                
+                # Move to next page if we haven't found enough servers
+                if not results.get('matches') or len(results['matches']) < 100:
+                    break
+                    
+                page += 1
+        
+        # Import the found servers
+        if servers_found > 0:
+            print(f"\nFound {servers_found} servers. Importing to database with country code: {country}")
+            logging.info("Importing %d servers from %s with country code: %s", 
+                        servers_found, filename, country)
+            import_urls_from_file(filename, country=country)
+        else:
+            print("No servers found or an error occurred.")
+            
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        logging.error("Error in calibre_by_country: %s", str(e))
+    
+    print("Search completed.")
     return()
 
 #############################################
@@ -2201,11 +2316,11 @@ def book_search(country):
         None
     """
     print("Starting Book Search for Country: ", country)
-    logging.info("Starting Book Search for Country:", country)
+    logging.info("Starting Book Search for Country: %s", country)
     logging.info("****Book Search Function****")
     import_urls_from_file(data_dir + country + '.txt')
     print("Ending Book Search for: ", country)
-    logging.info("Ending Book Search for: ", country)
+    logging.info("Ending Book Search for: %s", country)
     return()
 
 ############################################
