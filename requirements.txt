@@ -6,8 +6,8 @@ click-plugins==1.1.1
 colorama==0.4.6
 coverage==7.3.4
 filelock==3.13.1
-gevent
-greenlet==3.0.3
+gevent==25.5.1
+greenlet==3.2.2
 gunicorn==20.1.0
 httpcore==1.0.2
 humanize
