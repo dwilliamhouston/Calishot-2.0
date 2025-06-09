@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  calishot:
+    build: .
+    container_name: calishot
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    volumes:
+      - /opt/shodantest2:/data
+    environment:
+      - DATA_DIR=/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

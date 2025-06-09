@@ -1,0 +1,2 @@
+# Run calishot.py every 12 hours
+0 */12 * * * root cd /app && python calishot.py >> /var/log/calishot/cron.log 2>&1
