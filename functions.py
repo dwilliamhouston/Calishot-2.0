@@ -2192,14 +2192,14 @@ def diff(old, new, dir=data_dir, ):
 ############################
 # Query Calibre by Country #
 ############################
-def calibre_by_country(country, max_servers=1000, max_retries=3):
+def calibre_by_country(country, max_servers=1000, max_retries=5):
     """
     Generates a list of web-Calibre servers by country and saves them to a file.
 
     Args:
         country (str): The country for which to generate the list of web-Calibre servers.
-        max_servers (int): Maximum number of servers to return. Default is 100.
-        max_retries (int): Maximum number of retry attempts for API calls. Default is 3.
+        max_servers (int): Maximum number of servers to return. Default is 1000.
+        max_retries (int): Maximum number of retry attempts for API calls. Default is 5.
 
     Returns:
         None
