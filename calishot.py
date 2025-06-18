@@ -46,7 +46,9 @@ if run_search_by_country:
         'SI', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SY', 'SZ',
         'TD', 'TG', 'TH', 'TJ', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW',
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
-        'YE', 'ZA', 'ZM', 'ZW'
+        'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
+        'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
+        'FO', 'GF', 'PF', 'TF'    
     ]
     
     print(f"Processing {len(country_codes)} countries...")
@@ -83,7 +85,9 @@ if run_book_search:
         'SI', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SY', 'SZ',
         'TD', 'TG', 'TH', 'TJ', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW',
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
-        'YE', 'ZA', 'ZM', 'ZW'
+        'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
+        'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
+        'FO', 'GF', 'PF', 'TF'    
     ]
     
     print(f"Processing {len(country_codes)} countries...")

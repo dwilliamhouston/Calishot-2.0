@@ -78,6 +78,8 @@ def init_sites_db(dir=data_dir):
         "last_online": str,
         "last_check": str,
         "error": int,
+        "book_count": int,  # Add book_count column
+        "libraries_count": int,  # Add libraries_count column
     }
     
     # Create the table if it doesn't exist
@@ -127,18 +129,63 @@ def save_site(db: Database, site):
     if 'uuid' not in site:
         site['uuid'] = str(uuid.uuid4())
     
+    # Ensure book_count and libraries_count are integers
+    if 'book_count' in site and site['book_count'] is not None:
+        site['book_count'] = int(site['book_count'])
+    else:
+        site['book_count'] = 0
+        
+    if 'libraries_count' in site and site['libraries_count'] is not None:
+        site['libraries_count'] = int(site['libraries_count'])
+    else:
+        site['libraries_count'] = 0
+    
     # Log the site data being saved
     logging.info("Saving site with data: %s", site)
     print(f"Saving site: {site}")
     
     try:
-        # Ensure the sites table has the country column
-        if 'sites' in db.table_names():
+        # Ensure the sites table exists and has required columns
+        if 'sites' not in db.table_names():
+            # Create the table if it doesn't exist
+            db["sites"].create(
+                {
+                    "uuid": str,
+                    "url": str,
+                    "hostnames": str,
+                    "ports": str,
+                    "country": str,
+                    "isp": str,
+                    "status": str,
+                    "last_online": str,
+                    "last_check": str,
+                    "error": int,
+                    "book_count": int,
+                    "libraries_count": int
+                },
+                pk="uuid"
+            )
+        else:
+            # Add missing columns if they don't exist
             table = db['sites']
-            # Check if country column exists
-            if 'country' not in table.columns_dict:
-                logging.warning("Country column not found in sites table, altering table...")
-                table.add_column('country', str)
+            if 'book_count' not in table.columns_dict:
+                table.add_column('book_count', int)
+            if 'libraries_count' not in table.columns_dict:
+                table.add_column('libraries_count', int)
+        
+        # Get existing record if it exists
+        existing = None
+        if 'url' in site:
+            existing_records = list(db["sites"].rows_where(f"url = ?", [site['url']]))
+            if existing_records:
+                existing = existing_records[0]
+        
+        # Preserve existing counts if not provided in the update
+        if existing:
+            if 'book_count' not in site or site['book_count'] == 0:
+                site['book_count'] = existing.get('book_count', 0)
+            if 'libraries_count' not in site or site['libraries_count'] == 0:
+                site['libraries_count'] = existing.get('libraries_count', 0)
         
         # Perform the upsert
         db["sites"].upsert(site, pk='uuid')
@@ -169,10 +216,24 @@ def check_and_save_site(db, site):
         """
         logging.info("****Check and Save Function****")
 
-        res= check_calibre_site(site)
+        res = check_calibre_site(site)
         print(res)
         logging.info("Result: %s", res)
+        
+        # Ensure we have the site's UUID for updating
+        if 'uuid' not in res and 'url' in res:
+            # Try to find the site by URL if UUID is not available
+            site_record = db["sites"].get_where(f"url = '{res['url']}'").first()
+            if site_record:
+                res['uuid'] = site_record['uuid']
+        
+        # Save the site with updated information
         save_site(db, res)
+        
+        # Verify the data was saved correctly
+        if 'uuid' in res:
+            saved_site = db["sites"].get(res['uuid'])
+            logging.info("Saved site data: %s", saved_site)
 
 # import pysnooper
 # @pysnooper.snoop()
@@ -249,14 +310,30 @@ def check_calibre_site(site):
         return ret
 
     try: 
-        print("Total count=",r.json()["total_num"])
-        logging.info("Total count: %s", r.json()["total_num"])
-    except:
-        pass
+        total_books = int(r.json()["total_num"])
+        print("Total count=", total_books)
+        logging.info("Total count: %s", total_books)
+        # Store book count in the return dictionary
+        ret['book_count'] = total_books
+    except Exception as e:
+        print(f"Error getting book count: {e}")
+        logging.error(f"Error getting book count for {site['url']}: {e}")
+        ret['book_count'] = 0
 
     status=ret['status']='online'
     if status=="online":
-        ret['last_online']=now 
+        ret['last_online'] = now 
+        
+        # Get library count when site is online
+        try:
+            libraries = get_libs_from_site(site['url'])
+            ret['libraries_count'] = len(libraries)
+            print(f"Found {len(libraries)} libraries at {site['url']}")
+            logging.info(f"Found {len(libraries)} libraries at {site['url']}")
+        except Exception as e:
+            print(f"Error getting libraries: {e}")
+            logging.error(f"Error getting libraries for {site['url']}: {e}")
+            ret['libraries_count'] = 0
 
     return ret
 
@@ -418,9 +495,30 @@ def get_libs_from_site(site):
         return
         # pass
 
-    libraries = r.json()["library_map"].keys()
+    libraries = list(r.json()["library_map"].keys())
+    libraries_count = len(libraries)
     logging.info("Libraries: %s", libraries)
     print("Libraries:", ", ".join(libraries))
+    
+    # Update libraries count in sites database
+    try:
+        sites_db = Database(Path(data_dir) / "sites.db")
+        site_record = None
+        
+        # Try to find the site by URL if UUID is not available
+        for record in sites_db["sites"].rows_where(f"url LIKE '%{server}%'"):
+            site_record = record
+            break
+            
+        if site_record:
+            site_record["libraries_count"] = libraries_count
+            sites_db["sites"].update(site_record["uuid"], site_record)
+            print(f"Updated libraries count to {libraries_count} in sites database for {server}")
+            logging.info(f"Updated libraries count to {libraries_count} in sites database for {server}")
+    except Exception as e:
+        print(f"Error updating libraries count in sites database: {e}")
+        logging.error(f"Error updating libraries count in sites database: {e}")
+    
     return libraries
 
 ###################################
@@ -810,6 +908,20 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
     print()    
     print(f"Total count={total_num} from {server}")
     logging.info(f"Total count={total_num} from {server}")
+    
+    # Update book count in sites database
+    try:
+        sites_db = Database(Path(dir) / "sites.db")
+        site_record = sites_db["sites"].get(_uuid)
+        if site_record:
+            site_record["book_count"] = total_num
+            sites_db["sites"].update(_uuid, site_record)
+            print(f"Updated book count to {total_num} in sites database for {server}")
+            logging.info(f"Updated book count to {total_num} in sites database for {server}")
+    except Exception as e:
+        print(f"Error updating book count in sites database: {e}")
+        logging.error(f"Error updating book count in sites database: {e}")
+    
     # library=r.json()["base_url"].split('/')[-1]
     # base_url=r.json()["base_url"]
 
