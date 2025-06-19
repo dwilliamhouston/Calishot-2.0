@@ -87,7 +87,7 @@ if run_book_search:
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
         'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
         'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
-        'FO', 'GF', 'PF', 'TF'    
+        'FO', 'GF', 'PF', 'TF', 'other'   
     ]
     
     print(f"Processing {len(country_codes)} countries...")

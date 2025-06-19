@@ -78,8 +78,10 @@ def init_sites_db(dir=data_dir):
         "last_online": str,
         "last_check": str,
         "error": int,
-        "book_count": int,  # Add book_count column
-        "libraries_count": int,  # Add libraries_count column
+        "book_count": int,  # Current book count
+        "last_book_count": int,  # Previous book count
+        "new_books": int,  # Number of new books since last check
+        "libraries_count": int,  # Number of libraries
     }
     
     # Create the table if it doesn't exist
@@ -320,20 +322,32 @@ def check_calibre_site(site):
         logging.error(f"Error getting book count for {site['url']}: {e}")
         ret['book_count'] = 0
 
-    status=ret['status']='online'
-    if status=="online":
-        ret['last_online'] = now 
+    # Default status is online
+    ret['status'] = 'online'
+    
+    # Get library count when site is online
+    try:
+        libraries = get_libs_from_site(site['url'])
+        libraries_count = len(libraries)
+        ret['libraries_count'] = libraries_count
+        print(f"Found {libraries_count} libraries at {site['url']}")
+        logging.info(f"Found {libraries_count} libraries at {site['url']}")
         
-        # Get library count when site is online
-        try:
-            libraries = get_libs_from_site(site['url'])
-            ret['libraries_count'] = len(libraries)
-            print(f"Found {len(libraries)} libraries at {site['url']}")
-            logging.info(f"Found {len(libraries)} libraries at {site['url']}")
-        except Exception as e:
-            print(f"Error getting libraries: {e}")
-            logging.error(f"Error getting libraries for {site['url']}: {e}")
-            ret['libraries_count'] = 0
+        # If no libraries found, mark status as 'unknown'
+        if libraries_count == 0:
+            ret['status'] = 'unknown'
+            print(f"No libraries found at {site['url']}, marking as 'unknown'")
+            logging.warning(f"No libraries found at {site['url']}, marking as 'unknown'")
+        else:
+            ret['last_online'] = now
+            
+    except Exception as e:
+        error_msg = f"Error getting libraries for {site['url']}: {e}"
+        print(f"Error: {error_msg}")
+        logging.error(error_msg)
+        ret['libraries_count'] = 0
+        ret['status'] = 'error'
+        ret['error'] = str(e)
 
     return ret
 
@@ -909,18 +923,28 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
     print(f"Total count={total_num} from {server}")
     logging.info(f"Total count={total_num} from {server}")
     
-    # Update book count in sites database
+    # Update book count and calculate new books in sites database
     try:
         sites_db = Database(Path(dir) / "sites.db")
         site_record = sites_db["sites"].get(_uuid)
         if site_record:
-            site_record["book_count"] = total_num
+            # Get the previous book count if it exists
+            last_count = site_record.get("book_count", 0)
+            # Calculate new books (only if this isn't the first run)
+            new_books = max(0, total_num - last_count) if last_count > 0 else 0
+            # Update the record with new counts
+            site_record.update({
+                "last_book_count": last_count,
+                "book_count": total_num,
+                "new_books": new_books,
+                "last_check": datetime.datetime.utcnow().isoformat()
+            })
             sites_db["sites"].update(_uuid, site_record)
-            print(f"Updated book count to {total_num} in sites database for {server}")
-            logging.info(f"Updated book count to {total_num} in sites database for {server}")
+            print(f"Updated book count: {last_count} → {total_num} (+{new_books} new) in sites database for {server}")
+            logging.info(f"Updated book count: {last_count} → {total_num} (+{new_books} new) in sites database for {server}")
     except Exception as e:
         print(f"Error updating book count in sites database: {e}")
-        logging.error(f"Error updating book count in sites database: {e}")
+        logging.error(f"Error updating book count in sites database: {e}", exc_info=True)
     
     # library=r.json()["base_url"].split('/')[-1]
     # base_url=r.json()["base_url"]
