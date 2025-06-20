@@ -48,7 +48,7 @@ if run_search_by_country:
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
         'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
         'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
-        'FO', 'GF', 'PF', 'TF'    
+        'FO', 'GF', 'PF', 'TF'
     ]
     
     print(f"Processing {len(country_codes)} countries...")
@@ -87,7 +87,7 @@ if run_book_search:
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
         'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
         'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
-        'FO', 'GF', 'PF', 'TF', 'other'   
+        'FO', 'GF', 'PF', 'TF'  
     ]
     
     print(f"Processing {len(country_codes)} countries...")
@@ -98,6 +98,16 @@ if run_book_search:
         print(f"\nProcessing country: {country_code}")
         logging.info(f"Processing country: {country_code}")
         book_search(country_code)
+    
+    # Process other.txt if it exists
+    other_file = Path("other.txt")
+    if other_file.exists():
+        print("\nProcessing other.txt...")
+        logging.info("Processing other.txt")
+        import_urls_from_file("other.txt")
+    else:
+        print("\nother.txt not found, skipping...")
+        logging.info("other.txt not found, skipping...")
 
 ####################################
 # Call check_calibre_list Function #
