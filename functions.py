@@ -28,12 +28,40 @@ import unidecode
 from requests.adapters import HTTPAdapter
 import urllib3
 import logging
+import configparser
+
+# Configure logging
 logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.DEBUG)
+
+# Initialize Shodan API
+def get_shodan_api_key():
+    config = configparser.ConfigParser()
+    config_file = Path('config.ini')
+    
+    if not config_file.exists():
+        raise FileNotFoundError("config.ini not found. Please create it with your Shodan API key.")
+    
+    config.read(config_file)
+    
+    if 'shodan' not in config or 'api_key' not in config['shodan']:
+        raise ValueError("Shodan API key not found in config.ini. Please add it under the [shodan] section.")
+    
+    api_key = config['shodan']['api_key'].strip()
+    if not api_key or api_key == 'your_shodan_api_key_here':
+        raise ValueError("Please set your Shodan API key in config.ini")
+    
+    return api_key
+
+try:
+    api = shodan.Shodan(get_shodan_api_key())
+except Exception as e:
+    logging.error(f"Failed to initialize Shodan API: {str(e)}")
+    print(f"Error: {str(e)}")
+    print("Please check your config.ini file and ensure it contains a valid Shodan API key.")
+    sys.exit(1)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
-global api
-api = shodan.Shodan('sGgC3qPIynA8uN24lbI6bEyLL94qAd8q')
 
 global site_conn
 data_dir = "./data/"
@@ -96,9 +124,16 @@ def init_sites_db(dir=data_dir):
         table = db["sites"]
         for column, col_type in sites_schema.items():
             if column not in table.columns_dict:
-                print(f"Adding missing column '{column}' to 'sites' table")
-                logging.info("Adding missing column '%s' to 'sites' table", column)
-                table.add_column(column, col_type)
+                print(f"Adding missing column '{column}' to 'sites' table with type {col_type.__name__}")
+                logging.info("Adding missing column '%s' to 'sites' table with type %s", column, col_type.__name__)
+                # Add the column with a default value based on type
+                default_value = 0 if col_type == int else ""
+                table.add_column(column, col_type, if_not_exists=True, default=default_value)
+                
+                # If we're adding last_book_count or new_books, initialize them to 0 for existing records
+                if column in ["last_book_count", "new_books"]:
+                    print(f"Initializing {column} to 0 for all existing records")
+                    db.conn.execute(f"UPDATE sites SET {column} = 0 WHERE {column} IS NULL")
     
     # Enable WAL mode for better concurrency
     db.conn.execute('PRAGMA journal_mode=WAL;')
@@ -131,16 +166,13 @@ def save_site(db: Database, site):
     if 'uuid' not in site:
         site['uuid'] = str(uuid.uuid4())
     
-    # Ensure book_count and libraries_count are integers
-    if 'book_count' in site and site['book_count'] is not None:
-        site['book_count'] = int(site['book_count'])
-    else:
-        site['book_count'] = 0
-        
-    if 'libraries_count' in site and site['libraries_count'] is not None:
-        site['libraries_count'] = int(site['libraries_count'])
-    else:
-        site['libraries_count'] = 0
+    # Ensure numeric fields are integers
+    numeric_fields = ['book_count', 'libraries_count', 'last_book_count', 'new_books']
+    for field in numeric_fields:
+        if field in site and site[field] is not None:
+            site[field] = int(site[field])
+        else:
+            site[field] = 0
     
     # Log the site data being saved
     logging.info("Saving site with data: %s", site)
@@ -163,6 +195,8 @@ def save_site(db: Database, site):
                     "last_check": str,
                     "error": int,
                     "book_count": int,
+                    "last_book_count": int,
+                    "new_books": int,
                     "libraries_count": int
                 },
                 pk="uuid"
@@ -170,10 +204,15 @@ def save_site(db: Database, site):
         else:
             # Add missing columns if they don't exist
             table = db['sites']
-            if 'book_count' not in table.columns_dict:
-                table.add_column('book_count', int)
-            if 'libraries_count' not in table.columns_dict:
-                table.add_column('libraries_count', int)
+            numeric_columns = {
+                'book_count': int,
+                'last_book_count': int,
+                'new_books': int,
+                'libraries_count': int
+            }
+            for col, col_type in numeric_columns.items():
+                if col not in table.columns_dict:
+                    table.add_column(col, col_type, default=0)
         
         # Get existing record if it exists
         existing = None
@@ -184,10 +223,11 @@ def save_site(db: Database, site):
         
         # Preserve existing counts if not provided in the update
         if existing:
-            if 'book_count' not in site or site['book_count'] == 0:
-                site['book_count'] = existing.get('book_count', 0)
-            if 'libraries_count' not in site or site['libraries_count'] == 0:
-                site['libraries_count'] = existing.get('libraries_count', 0)
+            # Preserve existing numeric fields if not provided in the update
+            numeric_fields = ['book_count', 'last_book_count', 'new_books', 'libraries_count']
+            for field in numeric_fields:
+                if field not in site or (field in site and site[field] == 0 and field != 'new_books'):
+                    site[field] = existing.get(field, 0)
         
         # Perform the upsert
         db["sites"].upsert(site, pk='uuid')
