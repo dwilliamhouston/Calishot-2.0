@@ -99,15 +99,15 @@ if run_book_search:
         logging.info(f"Processing country: {country_code}")
         book_search(country_code)
     
-    # Process other.txt if it exists
-    other_file = Path("other.txt")
+    # Process other.txt if it exists in the data directory
+    other_file = Path("data/other.txt")
     if other_file.exists():
-        print("\nProcessing other.txt...")
-        logging.info("Processing other.txt")
-        import_urls_from_file("other.txt")
+        print("\nProcessing data/other.txt...")
+        logging.info("Processing data/other.txt")
+        import_urls_from_file("data/other.txt")
     else:
-        print("\nother.txt not found, skipping...")
-        logging.info("other.txt not found, skipping...")
+        print("\ndata/other.txt not found, skipping...")
+        logging.info("data/other.txt not found, skipping...")
 
 ####################################
 # Call check_calibre_list Function #
