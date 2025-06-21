@@ -437,25 +437,49 @@ def map_site_from_url(url, country=None):
             - 'country' (str): The country code for the site.
     """
     logging.info("****Map Site from URL Function****")
-    ret={}
-    print ('*******')
-    print ('URL = ', url)
-    print ('*******')
+    ret = {}
+    print('*******')
+    print('Processing URL:', url)
+    print('*******')
     
-    if len(url) > 30:
-        return ret
-    else:
-        site=urlparse(url)
-        print(site)
-        site=site._replace(path='')
-        logging.info("URL: %s", url)
-        ret['url']=urlunparse(site)
-        logging.info("Hostnames: %s", site.hostname)
-        ret['hostnames']=[site.hostname]
-        logging.info("Port: %s", site.port)
-        ret['ports']=[str(site.port)]
+    try:
+        # Remove any whitespace and newlines
+        url = url.strip()
+        
+        # Basic URL validation
+        if not url or not url.startswith(('http://', 'https://')):
+            print(f"Invalid URL (must start with http:// or https://): {url}")
+            logging.warning(f"Invalid URL format: {url}")
+            return ret
+            
+        # Parse the URL
+        site = urlparse(url)
+        if not site.hostname:
+            print(f"Could not extract hostname from URL: {url}")
+            logging.warning(f"Could not extract hostname from URL: {url}")
+            return ret
+            
+        # Remove path and rebuild URL
+        site = site._replace(path='', params='', query='', fragment='')
+        clean_url = urlunparse(site)
+        
+        # Prepare the return dictionary
+        ret = {
+            'url': clean_url,
+            'hostnames': [site.hostname],
+            'ports': [str(site.port) if site.port else '80' if site.scheme == 'http' else '443']
+        }
+        
         if country:
             ret['country'] = country
+            
+        print(f"Successfully processed URL: {url} -> {clean_url}")
+        logging.info(f"Mapped URL {url} to {ret}")
+        return ret
+        
+    except Exception as e:
+        print(f"Error processing URL {url}: {str(e)}")
+        logging.error(f"Error processing URL {url}: {str(e)}", exc_info=True)
         return ret
 
 ############################################################
@@ -965,26 +989,60 @@ def index_ebooks_from_library(site, _uuid="", library="", start=0, stop=0, dir=d
     
     # Update book count and calculate new books in sites database
     try:
-        sites_db = Database(Path(dir) / "sites.db")
+        sites_db_path = Path(dir) / "sites.db"
+        print(f"\nUpdating book count in database: {sites_db_path}")
+        logging.info(f"Updating book count in database: {sites_db_path}")
+        
+        sites_db = Database(sites_db_path)
+        
+        # Verify the sites table exists
+        if "sites" not in sites_db.table_names():
+            print("Error: 'sites' table does not exist in the database")
+            logging.error("'sites' table does not exist in the database")
+            return
+            
+        # Get the site record
         site_record = sites_db["sites"].get(_uuid)
-        if site_record:
-            # Get the previous book count if it exists
-            last_count = site_record.get("book_count", 0)
-            # Calculate new books (only if this isn't the first run)
-            new_books = max(0, total_num - last_count) if last_count > 0 else 0
-            # Update the record with new counts
-            site_record.update({
-                "last_book_count": last_count,
-                "book_count": total_num,
-                "new_books": new_books,
-                "last_check": datetime.datetime.utcnow().isoformat()
-            })
-            sites_db["sites"].update(_uuid, site_record)
-            print(f"Updated book count: {last_count} → {total_num} (+{new_books} new) in sites database for {server}")
-            logging.info(f"Updated book count: {last_count} → {total_num} (+{new_books} new) in sites database for {server}")
+        if not site_record:
+            print(f"Error: No site record found with UUID: {_uuid}")
+            logging.error(f"No site record found with UUID: {_uuid}")
+            return
+            
+        print(f"Found site record: {site_record}")
+        logging.info(f"Found site record: {site_record}")
+        
+        # Get the previous book count if it exists
+        last_count = site_record.get("book_count", 0)
+        
+        # Calculate new books (only if this isn't the first run)
+        new_books = max(0, total_num - last_count) if last_count > 0 else 0
+        
+        # Prepare the update data
+        update_data = {
+            "last_book_count": last_count,
+            "book_count": total_num,
+            "new_books": new_books,
+            "last_check": datetime.datetime.utcnow().isoformat()
+        }
+        
+        print(f"Updating with data: {update_data}")
+        logging.info(f"Updating with data: {update_data}")
+        
+        # Update the record with new counts
+        sites_db["sites"].update(_uuid, update_data)
+        
+        # Verify the update
+        updated_record = sites_db["sites"].get(_uuid)
+        print(f"Verification - Updated record: {updated_record}")
+        logging.info(f"Verification - Updated record: {updated_record}")
+        
+        print(f"Successfully updated book count: {last_count} → {total_num} (+{new_books} new) for {server}")
+        logging.info(f"Successfully updated book count: {last_count} → {total_num} (+{new_books} new) for {server}")
+        
     except Exception as e:
-        print(f"Error updating book count in sites database: {e}")
-        logging.error(f"Error updating book count in sites database: {e}", exc_info=True)
+        error_msg = f"Error updating book count in sites database: {str(e)}"
+        print(error_msg)
+        logging.error(error_msg, exc_info=True)
     
     # library=r.json()["base_url"].split('/')[-1]
     # base_url=r.json()["base_url"]
@@ -1679,11 +1737,84 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         sys.exit(1)
         
 
-    total_num=int(r.json()["total_num"])
-    total_num= total_num if not stop else stop
-    print()    
-    print(f"Total count={total_num} from {server}")
-    logging.info("Total count=%s from %s", total_num, server)
+    # Get the total number of books from the response
+    try:
+        response_data = r.json()
+        if "total_num" not in response_data:
+            error_msg = f"Invalid response format from {url}. Missing 'total_num' in response: {response_data}"
+            print(error_msg)
+            logging.error(error_msg)
+            return
+            
+        total_num = int(response_data["total_num"])
+        total_num = total_num if not stop else min(total_num, stop)
+        print()    
+        print(f"Total count={total_num} from {server}")
+        logging.info("Total count=%s from %s", total_num, server)
+    except (ValueError, TypeError) as e:
+        error_msg = f"Error parsing 'total_num' from response: {e}. Response: {response_data}"
+        print(error_msg)
+        logging.error(error_msg)
+        return
+    except Exception as e:
+        error_msg = f"Unexpected error processing response: {e}"
+        print(error_msg)
+        logging.error(error_msg, exc_info=True)
+        return
+
+    # Update book count and calculate new books in sites database
+    try:
+        sites_db_path = Path(dir) / "sites.db"
+        print(f"\nUpdating book count in database: {sites_db_path}")
+        logging.info(f"Updating book count in database: {sites_db_path}")
+        
+        sites_db = Database(sites_db_path)
+        
+        # Verify the sites table exists
+        if "sites" not in sites_db.table_names():
+            print("Error: 'sites' table does not exist in the database")
+            logging.error("'sites' table does not exist in the database")
+        else:            
+            # Get the site record
+            site_record = sites_db["sites"].get(_uuid)
+            if not site_record:
+                print(f"Error: No site record found with UUID: {_uuid}")
+                logging.error(f"No site record found with UUID: {_uuid}")
+            else:
+                print(f"Found site record: {site_record}")
+                logging.info(f"Found site record: {site_record}")
+                
+                # Get the previous book count if it exists
+                last_count = site_record.get("book_count", 0)
+                
+                # Calculate new books (only if this isn't the first run)
+                new_books = max(0, total_num - last_count) if last_count > 0 else 0
+                
+                # Prepare the update data
+                update_data = {
+                    "last_book_count": last_count,
+                    "book_count": total_num,
+                    "new_books": new_books,
+                    "last_check": datetime.datetime.utcnow().isoformat()
+                }
+                
+                print(f"Updating with data: {update_data}")
+                logging.info(f"Updating with data: {update_data}")
+                
+                # Update the record with new counts
+                sites_db["sites"].update(_uuid, update_data)
+                
+                # Verify the update
+                updated_record = sites_db["sites"].get(_uuid)
+                print(f"Verification - Updated record: {updated_record}")
+                logging.info(f"Verification - Updated record: {updated_record}")
+                
+                print(f"Successfully updated book count: {last_count} → {total_num} (+{new_books} new) for {server}")
+                logging.info(f"Successfully updated book count: {last_count} → {total_num} (+{new_books} new) for {server}")
+    except Exception as e:
+        error_msg = f"Error updating book count in sites database: {str(e)}"
+        print(error_msg)
+        logging.error(error_msg, exc_info=True)
 
     db=init_site_db(site, _uuid=_uuid, dir=dir)
     r_site = (list(db['site'].rows)[0])

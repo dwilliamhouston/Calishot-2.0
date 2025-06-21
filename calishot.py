@@ -3,6 +3,7 @@
 # Python3 calishot.py  #
 ########################
 
+from pathlib import Path
 from functions import import_urls_from_file, check_calibre_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_site, build_index, index_to_json, diff, calibre_by_country, book_search, output_online_db
 
 import logging
