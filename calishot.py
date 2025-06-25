@@ -12,7 +12,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.E
 #####################
 # Flags for testing #
 #####################
-run_search_by_country = True
+run_search_by_country = False
 run_book_search = True
 run_check_calibre_list = True
 run_output_online_db = True
@@ -31,7 +31,7 @@ if run_search_by_country:
     
     # Complete list of ISO 3166-1 alpha-2 country codes
     country_codes = [
-        'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AR', 'AT', 'AU', 'AZ',
+   'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AR', 'AT', 'AU', 'AZ',
         'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BN', 'BO', 'BR',
         'BS', 'BT', 'BW', 'BY', 'BZ', 'CA', 'CD', 'CF', 'CG', 'CH', 'CI', 'CL',
         'CM', 'CN', 'CO', 'CR', 'CU', 'CV', 'CY', 'CZ', 'DE', 'DJ', 'DK', 'DM',
@@ -49,7 +49,10 @@ if run_search_by_country:
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
         'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
         'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
-        'FO', 'GF', 'PF', 'TF'
+        'FO', 'GF', 'PF', 'GI', 'GL', 'GP', 'GU', 'GG', 'HK', 'IM', 'JE', 'MO',
+        'MQ', 'YT', 'MS', 'NC', 'NU', 'NF', 'MP', 'PS', 'PN', 'PR', 'RE', 'BL',
+        'SH', 'MF', 'PM', 'SX', 'GS', 'SJ', 'TK', 'TC', 'VG', 'VI', 'WF', 'EH',
+        'AX'
     ]
     
     print(f"Processing {len(country_codes)} countries...")
@@ -88,7 +91,10 @@ if run_book_search:
         'TZ', 'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VN', 'VU', 'WS',
         'YE', 'ZA', 'ZM', 'ZW', 'AX', 'AS', 'AQ', 'AW', 'BM', 'BQ', 'BV', 'IO',
         'KY', 'CX', 'CC', 'CK', 'FO', 'GS', 'HM', 'SJ', 'SS', 'TF', 'UM', 'FK',
-        'FO', 'GF', 'PF', 'TF'  
+        'FO', 'GF', 'PF', 'GI', 'GL', 'GP', 'GU', 'GG', 'HK', 'IM', 'JE', 'MO',
+        'MQ', 'YT', 'MS', 'NC', 'NU', 'NF', 'MP', 'PS', 'PN', 'PR', 'RE', 'BL',
+        'SH', 'MF', 'PM', 'SX', 'GS', 'SJ', 'TK', 'TC', 'VG', 'VI', 'WF', 'EH',
+        'AX'
     ]
     
     print(f"Processing {len(country_codes)} countries...")
@@ -105,7 +111,7 @@ if run_book_search:
     if other_file.exists():
         print("\nProcessing data/other.txt...")
         logging.info("Processing data/other.txt")
-        import_urls_from_file("data/other.txt")
+        import_urls_from_file("data/other.txt", country="other")
     else:
         print("\ndata/other.txt not found, skipping...")
         logging.info("data/other.txt not found, skipping...")
