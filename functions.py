@@ -243,25 +243,59 @@ def save_site(db: Database, site):
             if 'last_book_count' not in site or site['last_book_count'] is None:
                 site['last_book_count'] = existing.get('last_book_count', 0)
             
-            # Special handling for book_count - only update if explicitly provided
-            if 'book_count' not in site or site['book_count'] is None:
-                site['book_count'] = existing.get('book_count', 0)
+            # Handle book counts for existing records
+            if existing:
+                # Get current and previous book counts
+                current_book_count = site.get('book_count')
+                previous_book_count = existing.get('book_count', 0)
+                previous_last_book_count = existing.get('last_book_count', 0)
+
+                # Always recalculate new_books if book_count is present, otherwise use existing value
+                if current_book_count is not None:
+                    try:
+                        current_book_count = int(current_book_count)
+                    except Exception:
+                        current_book_count = 0
+                    try:
+                        previous_book_count = int(previous_book_count)
+                    except Exception:
+                        previous_book_count = 0
+                    new_books = max(0, current_book_count - previous_book_count)
+                    site['new_books'] = new_books
+                    site['last_book_count'] = previous_book_count if previous_book_count > 0 else 0
+                    logging.info(
+                        f"[save_site] Recalculated new_books for {site.get('url')} - Current: {current_book_count}, Previous: {previous_book_count}, New Books: {new_books}")
+                else:
+                    # If book_count not present, preserve existing new_books
+                    site['new_books'] = existing.get('new_books', 0)
+                    site['last_book_count'] = existing.get('last_book_count', 0)
+                    logging.info(f"[save_site] Preserved existing new_books for {site.get('url')}: {site['new_books']}")
+                    
+                    # Log a warning if we detect a change but new_books is 0
+                    if current_book_count != previous_book_count and new_books == 0 and previous_book_count > 0:
+                        logging.warning(
+                            f"Unexpected state for {site.get('url')}: "
+                            f"Count changed ({previous_book_count} -> {current_book_count}) "
+                            f"but new_books is 0"
+                        )
+                # If book_count is not being updated, preserve existing values
+                if 'book_count' not in site:
+                    if 'new_books' not in site:
+                        site['new_books'] = existing.get('new_books', 0)
+                    if 'last_book_count' not in site:
+                        site['last_book_count'] = previous_last_book_count
+            # For new records, initialize counts if not provided
+            else:
+                if 'book_count' not in site or site['book_count'] is None:
+                    site['book_count'] = 0
+                if 'last_book_count' not in site or site['last_book_count'] is None:
+                    site['last_book_count'] = 0
+                if 'new_books' not in site or site['new_books'] is None:
+                    site['new_books'] = 0
             
-            # If we have a new book_count, update last_book_count with the previous book_count
-            if 'book_count' in site and site['book_count'] is not None:
-                # Only update last_book_count if the book_count has actually changed
-                if existing and existing.get('book_count') != site['book_count']:
-                    site['last_book_count'] = existing.get('book_count', 0)
-                    logging.info(f"Updated last_book_count to {site['last_book_count']} for site {site.get('url')}")
-                # If this is a new record or last_book_count is not set, initialize it with current book_count
-                elif not existing or 'last_book_count' not in site or site['last_book_count'] is None:
-                    site['last_book_count'] = site['book_count']
-                    logging.info(f"Initialized last_book_count to {site['book_count']} for new site {site.get('url')}")
-            
-            # Only preserve country if it's not being explicitly updated
-            if 'country' not in site:
+            # Preserve existing country if not explicitly set in the update
+            if 'country' not in site or not site['country']:
                 site['country'] = existing.get('country', '')
-            # If country is an empty string in the update, it will be set to empty
                     
             # Preserve timestamp fields if not provided
             timestamp_fields = ['last_failed', 'last_success']
@@ -349,7 +383,7 @@ def check_calibre_site(site):
              - "failed_attempts" (int): The number of consecutive failed attempts.
              - "last_failed" (str): The timestamp of the last failure.
     """
-
+    
     logging.info("****Check Calibre Site Function****")
     now = str(datetime.datetime.now())
     
@@ -461,26 +495,68 @@ def check_calibre_site(site):
         print("Total count=", total_books)
         logging.info("Total count: %s", total_books)
         
-        # Set last_book_count to the previous book_count if it exists
-        last_book_count = site.get('book_count')
+        # Get the current book count from the site
+        current_book_count = total_books
+        
+        # Get the previous state
+        previous_book_count = site.get('book_count', 0)
+        previous_last_book_count = site.get('last_book_count', 0)
+        
+        # Calculate new books based on the difference between current and last total count
+        # Always calculate new_books, even if previous_book_count is 0
+        new_books = max(0, current_book_count - previous_book_count)
+        last_book_count = previous_book_count if previous_book_count > 0 else 0
+        
+        # Log the calculation for debugging
+        debug_info = (
+            f"Book count update for {site.get('url')}: "
+            f"Current: {current_book_count}, "
+            f"Previous: {previous_book_count}, "
+            f"Last: {last_book_count}, "
+            f"New books: {new_books}"
+        )
+        
+        # Special case for first run or reset
+        if previous_book_count == 0 and previous_last_book_count == 0:
+            # First time seeing this site, initialize counts
+            new_books = 0
+            last_book_count = current_book_count
+            debug_info += " (First run, initializing counts)"
+        
+        logging.info(debug_info)
+        
+        # Log a warning if we detect a change but new_books is 0
+        if current_book_count != previous_book_count and new_books == 0 and previous_book_count > 0:
+            logging.warning(
+                f"Unexpected state for {site.get('url')}: "
+                f"Count changed ({previous_book_count} -> {current_book_count}) "
+                f"but new_books is 0"
+            )
         
         # Update return values for successful connection
         ret.update({
-            'book_count': total_books,
-            'last_book_count': last_book_count if last_book_count is not None else total_books,
+            'book_count': current_book_count,
+            'last_book_count': last_book_count,  # Store the previous total book count
+            'new_books': new_books,
             'status': 'online',
             'last_online': now,
             'last_success': now,
-            'error': None,  # Explicitly set to None for online status
-            'error_message': None  # Explicitly set to None for online status
+            'error': None,
+            'error_message': None
         })
+        
+        logging.info(f"Book counts - Current: {current_book_count}, Previous: {previous_book_count}, Last: {last_book_count}, New: {new_books}")
+        print(f"Updated book counts - Current: {current_book_count}, Previous: {previous_book_count}, Last: {last_book_count}, New: {new_books}")
+        
+        print(f"Book count: {total_books}, Last book count: {last_book_count}, New books: {new_books}")
+        logging.info(f"Book count: {total_books}, Last book count: {last_book_count}, New books: {new_books}")
         
         # Reset failed attempts counter on success
         if failed_attempts > 0:
             ret['failed_attempts'] = 0
             logging.info(f"Reset failed_attempts counter for {site['url']}")
         
-        # Get library count when site is online
+        # Get library count and calculate total books when site is online
         try:
             libraries = get_libs_from_site(site['url'])
             libraries_count = len(libraries)
@@ -488,14 +564,47 @@ def check_calibre_site(site):
             print(f"Found {libraries_count} libraries at {site['url']}")
             logging.info(f"Found {libraries_count} libraries at {site['url']}")
             
+            # Initialize total book count with the main library count
+            total_books = ret.get('book_count', 0)
+            
+            # If there are multiple libraries, get the book count for each one
+            if libraries_count > 1:
+                print(f"Calculating total books across {libraries_count} libraries...")
+                logging.info(f"Calculating total books across {libraries_count} libraries")
+                
+                for library in libraries:
+                    try:
+                        # Skip the main library as we already have its count
+                        if not library:
+                            continue
+                            
+                        lib_url = f"{api}search/{library}?num=0"
+                        lib_r = requests.get(lib_url, verify=False, timeout=(timeout, 30))
+                        lib_r.raise_for_status()
+                        lib_count = int(lib_r.json().get("total_num", 0))
+                        total_books += lib_count
+                        print(f"Library '{library}': {lib_count} books")
+                        logging.info(f"Library '{library}': {lib_count} books")
+                        
+                    except Exception as lib_e:
+                        error_msg = f"Error getting book count for library '{library}': {str(lib_e)}"
+                        print(f"Warning: {error_msg}")
+                        logging.warning(error_msg, exc_info=True)
+                
+                # Update the total book count in the return value
+                ret['book_count'] = total_books
+                print(f"Total books across all libraries: {total_books}")
+                logging.info(f"Total books across all libraries: {total_books}")
+            
             # If no libraries found, mark status as 'unknown' but keep error fields as None
             if libraries_count == 0:
                 print(f"No libraries found at {site['url']}, marking as 'unknown'")
                 logging.warning(f"No libraries found at {site['url']}, marking as 'unknown'")
                 ret.update({
                     'status': 'unknown',
-                    'error': None,  # Ensure error is None even for unknown status
-                    'error_message': None  # Ensure error_message is None even for unknown status
+                    'book_count': 0,
+                    'error': None,
+                    'error_message': None
                 })
                 
         except Exception as lib_e:
@@ -505,8 +614,7 @@ def check_calibre_site(site):
             ret.update({
                 'libraries_count': 0,
                 'status': 'online',  # Still consider it online even if library check fails
-                'error': error_msg,
-                'error_message': str(lib_e)
+                # Don't set error/error_message here to maintain clean online status
             })
             
         return ret
@@ -606,11 +714,9 @@ def map_site_from_url(url, country=None):
         ret = {
             'url': clean_url,
             'hostnames': [site.hostname],
-            'ports': [str(site.port) if site.port else '80' if site.scheme == 'http' else '443']
+            'ports': [str(site.port) if site.port else '80' if site.scheme == 'http' else '443'],
+            'country': country if country else ''
         }
-        
-        if country:
-            ret['country'] = country
             
         print(f"Successfully processed URL: {url} -> {clean_url}")
         logging.info(f"Mapped URL {url} to {ret}")
@@ -787,14 +893,21 @@ def get_libs_from_site(site):
     except requests.RequestException as e: 
         print("Unable to open site:", url)
         logging.error("Unable to open site: %s", url)
-        # return
+        return []
     except Exception as e:
         logging.error("Other issue: %s", e)
         print ("Other issue:", e)
-        return
-        # pass
+        return []
 
-    libraries = list(r.json()["library_map"].keys())
+    # Tolerate servers without library_map or alternative shapes
+    try:
+        data = r.json()
+        libraries = list((data.get("library_map") or {}).keys())
+        if not libraries and isinstance(data.get("libraries"), list):
+            libraries = data.get("libraries")
+    except Exception as e:
+        logging.error("Failed parsing library-info JSON: %s", e)
+        return []
     libraries_count = len(libraries)
     logging.info("Libraries: %s", libraries)
     print("Libraries:", ", ".join(libraries))
@@ -819,6 +932,64 @@ def get_libs_from_site(site):
         logging.error(f"Error updating libraries count in sites database: {e}")
     
     return libraries
+
+#############################################
+def create_library_records_for_servers(server_urls):
+    """
+    For each server in server_urls, fetch libraries and populate records in data/library.db.
+    Each record will have uuid, server_url, library_name, library_url, library_book_count.
+    Args:
+        server_urls (list[str]): List of server base URLs (e.g., http://1.2.3.4:8083)
+    Returns:
+        None
+    """
+    import sqlite3
+    import uuid as uuidlib
+    from pathlib import Path
+    print(server_urls)
+    
+    db_path = Path(__file__).parent / 'data' / 'library.db'
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        for server_url in server_urls:
+            try:
+                # Fetch library info from server
+                api = server_url.rstrip('/') + '/ajax/library-info'
+                r = requests.get(api, verify=False, timeout=(30, 30))
+                r.raise_for_status()
+                lib_map = r.json().get('library_map', {})
+                for lib_name, lib_info in lib_map.items():
+                    print(lib_name)
+                    library_url = lib_info.get('url', server_url.rstrip('/') + '/' + lib_name)
+                    print(library_url)
+                    book_count = lib_info.get('book_count') or lib_info.get('total_books')
+                    print(book_count)
+                    if book_count is None:
+                        # fallback: try get count from summary
+                        book_count = 0
+                    try:
+                        book_count = int(book_count)
+                    except Exception:
+                        book_count = 0
+                    record = (
+                        str(uuidlib.uuid4()),
+                        server_url,
+                        lib_name,
+                        library_url,
+                        book_count
+                    )
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO Library (uuid, server_url, library_name, library_url, library_book_count)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, record)
+                    logging.info(f"Inserted library record: {record}")
+            except Exception as e:
+                logging.error(f"Error processing server {server_url}: {e}")
+        conn.commit()
+    finally:
+        conn.close()
+    print("Library records created/updated for all servers.")
 
 ###################################
 # Check the list of sites in file #
@@ -1138,38 +1309,68 @@ def index_ebooks(site, library, start=0, stop=0, dir=data_dir, num=1000, force_r
         
     _uuid=str(uuid.uuid4())
     print ('libs = ', libs)
-    if libs:
-        for lib in libs:
-            print ('lib', lib)
-            print('Index ebooks From Libary', site, ' ', _uuid, ' ', lib, ' ', start, ' ', stop)
-            print("\n=== CALLING index_ebooks_from_library ===")
-            print(f"• site: {site}")
-            print(f"• _uuid: {_uuid}")
-            print(f"• library: {lib}")
-            print(f"• start: {start}")
-            print(f"• stop: {stop}")
-            print(f"• dir: {dir}")
-            print(f"• num: {num}")
-            print(f"• force_refresh: {force_refresh}")
-            print("======================================\n")
-            index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
-    else:
-            print('Not lib')
-            print("\n=== CALLING index_ebooks_from_library (no libs) ===")
-            print(f"• site: {site}")
-            print(f"• _uuid: {_uuid}")
-            print(f"• start: {start}")
-            print(f"• stop: {stop}")
-            print(f"• dir: {dir}")
-            print(f"• num: {num}")
-            print(f"• force_refresh: {force_refresh}")
-            print("==============================================\n")
-            index_ebooks_from_library(site=site, _uuid=_uuid, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh)   
+    # Aggregate counts across libraries and update site once
+    server = site.rstrip('/')
+    lib_list = libs if libs else ['']
+    lib_totals = []
+
+    for lib in lib_list:
+        print('Index ebooks From Library', site, _uuid, lib, start, stop)
+        cnt = index_ebooks_from_library(site=site, _uuid=_uuid, library=lib, start=start, stop=stop, dir=dir, num=num, force_refresh=force_refresh, update_site_count=False)
+        try:
+            cnt_int = int(cnt) if cnt is not None else 0
+        except Exception:
+            cnt_int = 0
+        print(f"• Library '{lib}' count: {cnt_int}")
+        logging.info("Library %s count: %s", lib, cnt_int)
+        lib_totals.append((lib, cnt_int))
+
+    site_total = sum(c for _, c in lib_totals)
+    print(f"• Aggregated site total across {len(lib_totals)} libraries: {site_total}")
+    logging.info("Aggregated site total across %s libraries: %s", len(lib_totals), site_total)
+
+    # Update sites.db once with the aggregated total
+    try:
+        sites_db = Database(Path(dir) / "sites.db")
+        current_time = datetime.datetime.utcnow().isoformat()
+        recs = list(sites_db.query("SELECT * FROM sites WHERE url = ? LIMIT 1", [server]))
+        if recs:
+            rec = dict(recs[0])
+            current = int(rec.get('book_count') or 0)
+            update = {
+                'book_count': site_total,
+                'last_book_count': current,
+                'new_books': max(0, site_total - current),
+                'last_check': current_time,
+                'status': 'online'
+            }
+            sites_db['sites'].update(rec['uuid'], update)
+            print(f"✓ Updated site total for {server}: {site_total}")
+        else:
+            new_uuid = str(uuid.uuid4())
+            row = {
+                'uuid': new_uuid,
+                'url': server,
+                'hostnames': server.split('//')[-1].split('/')[0],
+                'status': 'online',
+                'last_check': current_time,
+                'book_count': site_total,
+                'last_book_count': 0,
+                'new_books': site_total,
+                'libraries_count': len(lib_list)
+            }
+            sites_db['sites'].insert(row, pk='uuid')
+            print(f"✓ Created site record for {server} with total {site_total}")
+    except Exception as e:
+        print("⚠️ Failed to update aggregated site count:", e)
+        logging.error("Failed to update aggregated site count for %s: %s", server, e)
+
+    return
 
 #############################
 # Index Ebooks from Library #
 #############################
-def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=data_dir, num=1000, force_refresh=False):
+def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=data_dir, num=1000, force_refresh=False, update_site_count=False):
     """
     Index ebooks from a library on a site.
 
@@ -1199,73 +1400,130 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
     offset = 0 if not start else start-1
     server = site.rstrip('/')
     api = server + '/ajax/'
-    lib = library
-    library = '/' + library if library else library
-    
+    # Normalize library value for URL construction
+    lib = (library or '').strip('/')
+    library_path = f"/{lib}" if lib else ""
+
     # Debug print for the API URL
     print(f"• API URL: {api}")
-    print(f"• Library path: {library}")
+    print(f"• Library (normalized): '{lib}'")
+    print(f"• Library path: '{library_path}'")
     
     # Ensure the directory exists
     os.makedirs(dir, exist_ok=True)
     num=min(1000, num)
     server=server.rstrip('/')
     api=server+'/ajax/'
-    lib=library
-    library= '/'+library if library else library
 
     timeout=15
 
     print(f"\nIndexing library: {lib} from server: {server} ")
     logging.info(f"Indexing library: {lib} from server: {server} ")
-    url=api+'search'+library+'?num=0'
+    # Build count URL without introducing double slashes
+    url = f"{api}search{library_path}?num=0"
     print(f"\nGetting ebooks count of library: {lib} from server:{server} ")
     logging.info(f"Getting ebooks count of library: {lib} from server:{server} ")
     # Get the total number of ebooks
     print("\n=== GETTING EBOOK COUNT ===")
-    url = f"{api}search/{library}?num=0"
-    print(f"• Request URL: {url}")
-    
-    try:
-        print("• Sending request...")
-        r = requests.get(url, timeout=30, headers=headers)
-        print(f"• Response status: {r.status_code}")
-        r.raise_for_status()
-        print("• Request successful")
-        
-        # Debug: Print response content
-        print(f"• Response content (first 200 chars): {r.text[:200]}")
-        
+    print(f"• Initial Request URL: {url}")
+
+    # Try multiple endpoint variants for compatibility across Calibre-Web versions
+    from urllib.parse import quote
+    total_num = None
+    variants = []
+
+    # Determine candidate representations for the library (ID vs Name)
+    lib_candidates = []
+    if lib:
+        lib_candidates.append(lib)
         try:
-            data = r.json()
-            print(f"• JSON parsed successfully")
-            print(f"• Raw JSON data: {data}")
+            li = requests.get(f"{api}library-info", timeout=20, verify=False)
+            if li.ok:
+                data = li.json()
+                lmap = (data.get("library_map") or {})
+                # If lib matches a key, add its value (name)
+                if lib in lmap:
+                    name = lmap.get(lib)
+                    if isinstance(name, str) and name:
+                        lib_candidates.append(name)
+                # If lib matches a value (name), add its key (id)
+                for k, v in lmap.items():
+                    if isinstance(v, str) and v == lib:
+                        lib_candidates.append(str(k))
+                        break
+        except Exception as _e:
+            print("• library-info lookup failed (non-fatal):", _e)
+
+    # {api}search with and without explicit library
+    variants.append(url)  # {api}search{library_path}?num=0
+    for L in lib_candidates:
+        qL = quote(L)
+        variants.append(f"{api}search/{qL}?num=0")
+        variants.append(f"{api}search?num=0&library_id={qL}")
+        # Some versions require explicit empty query
+        variants.append(f"{api}search/{qL}?num=0&query=%5B%5D")
+        variants.append(f"{api}search?num=0&library_id={qL}&query=%5B%5D")
+    # Global (no library) fallbacks
+    variants.append(f"{api}search?num=0")
+    variants.append(f"{api}search?num=0&query=%5B%5D")
+
+    last_error = None
+    for i, vurl in enumerate(variants, start=1):
+        try:
+            print(f"• Attempt {i}: {vurl}")
+            r = requests.get(vurl, timeout=30, headers=headers)
+            print(f"  ↳ Status: {r.status_code}")
+            # Keep going even if non-200 to see others
+            r.raise_for_status()
+            txt = r.text[:300]
+            print(f"  ↳ Body[0:300]: {txt}")
+            try:
+                data = r.json()
+            except Exception as je:
+                print(f"  ↳ JSON parse failed: {je}")
+                last_error = je
+                continue
+
+            # Accept several possible keys
+            for key in ("total_num", "total", "count"):
+                if key in data and data.get(key) is not None:
+                    try:
+                        total_num = int(data[key])
+                    except Exception:
+                        try:
+                            total_num = int(str(data[key]).strip())
+                        except Exception:
+                            total_num = None
+                    break
             
-            if "total_num" not in data:
-                print(f"❌ 'total_num' not found in response. Available keys: {list(data.keys())}")
-                return
-                
-            total_num = int(data["total_num"])
-            print(f"• Total books from API: {total_num}")
-            
-            # Apply stop limit if specified
-            if stop > 0 and stop < total_num:
-                total_num = stop
-                print(f"• Limited total to {total_num} (stop={stop})")
-                
-            print(f"• Final book count: {total_num}")
-            logging.info(f"Total count={total_num} from {server}")
-            
-        except ValueError as e:
-            print(f"❌ Failed to parse JSON response: {e}")
-            print(f"• Response text: {r.text[:500]}")
-            logging.error(f"JSON parse error for {url}: {e}", exc_info=True)
-            return
-            
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error getting ebook count: {e}")
-        logging.error(f"Request failed for {url}: {e}", exc_info=True)
-        return
+            if total_num is not None:
+                print(f"  ↳ Parsed total_num={total_num} from key set {list(data.keys())}")
+                break
+            else:
+                print(f"  ↳ No total found, keys={list(data.keys())}")
+        except Exception as e:
+            print(f"  ↳ Attempt {i} failed: {e}")
+            last_error = e
+            continue
+
+    if total_num is None:
+        print("❌ Unable to determine total book count from any endpoint variant.")
+        if last_error:
+            print(f"Last error: {last_error}")
+        logging.error("All count endpoint variants failed for %s (lib=%s)", server, lib, exc_info=True)
+        total_num = 0
+
+    # Apply stop limit if specified
+    if stop > 0 and stop < total_num:
+        total_num = stop
+        print(f"• Limited total to {total_num} (stop={stop})")
+
+    print(f"• Final book count: {total_num}")
+    logging.info(f"Total count={total_num} from {server}")
+
+    # If we are only collecting the per-library count, return it now
+    if not update_site_count:
+        return total_num
 
     total_num = total_num if not stop else stop
     print(f"\n=== EBOOK COUNT ===")
@@ -2429,9 +2687,9 @@ def index_ebooks_except(site):
     logging.info("****Index Ebooks Exception Function****")
     try:
         index_ebooks(site)
-    except:
-        print("Error on site")
-        logging.error("Error on site: %s", site)
+    except Exception as e:
+        print(f"Error on site: {site} - {e}")
+        logging.exception(f"Error on site: {site}")
 
 ################
 # Index Ebooks #
@@ -2507,7 +2765,20 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
 
     print(f"\nIndexing library: {lib} from server: {server} ")
     logging.info("Indexing library: %s from server: %s ", lib, server)
-    url=api+'search'+library+'?num=0'
+    # Normalize library path segment once
+    lib_input = (library or '').strip()
+    if lib_input:
+        # Accept forms like 'main', '/main', 'search/main', '/ajax/search/main'
+        lib_clean = lib_input
+        for token in ['ajax/', 'search']:
+            lib_clean = lib_clean.replace(token, '')
+        lib_clean = lib_clean.strip('/')
+        lib_segment = f'/{lib_clean}' if lib_clean else ''
+    else:
+        lib_segment = ''
+
+    # Some servers require sort params even for count queries
+    url=api+f'search{lib_segment}?num=0&sort=timestamp&sort_order=desc'
     print(f"\nGetting ebooks count of library: {lib} from server:{server} ")
     logging.info("Getting ebooks count of library: %s from server: %s ", lib, server)
     print('URL = ',url)
@@ -2516,9 +2787,23 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         r=requests.get(url, verify=False, timeout=(timeout, 30))
         r.raise_for_status()
     except requests.RequestException as e: 
-        print("Unable to open site:", url)
-        logging.info("Unable to open site: %s", url)
-        return
+        print("Unable to open site:", url, "-", e)
+        logging.info("Unable to open site: %s - %s", url, e)
+        # Retry once without library segment if it was present
+        if lib_segment:
+            try:
+                fallback_url = api+f'search?num=0&sort=timestamp&sort_order=desc'
+                print('Retrying count without library segment: ', fallback_url)
+                logging.info('Retrying count without library segment: %s', fallback_url)
+                r=requests.get(fallback_url, verify=False, timeout=(timeout, 30))
+                r.raise_for_status()
+                url = fallback_url
+            except Exception as e2:
+                print("Fallback also failed:", e2)
+                logging.info("Fallback also failed: %s", e2)
+                return
+        else:
+            return
         # pass
     except Exception as e:
         print ("Other issue:", e)
@@ -2545,15 +2830,44 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         print(f"Total count={total_num} from {server}")
         logging.info("Total count=%s from %s", total_num, server)
     except (ValueError, TypeError) as e:
-        error_msg = f"Error parsing 'total_num' from response: {e}. Response: {response_data}"
+        error_msg = f"Error parsing 'total_num' from response: {e}. URL: {url}. Response: {response_data}"
         print(error_msg)
         logging.error(error_msg)
-        return
-    except Exception as e:
-        error_msg = f"Unexpected error processing response: {e}"
-        print(error_msg)
-        logging.error(error_msg, exc_info=True)
-        return
+        # Retry parsing after requesting without library segment if applicable
+        if lib_segment:
+            try:
+                fallback_url = api+f'search?num=0&sort=timestamp&sort_order=desc'
+                print('Retrying parse with request without library segment: ', fallback_url)
+                logging.info('Retrying parse with request without library segment: %s', fallback_url)
+                r=requests.get(fallback_url, verify=False, timeout=(timeout, 30))
+                r.raise_for_status()
+                response_data = r.json()
+                total_num = int(response_data['total_num']) if 'total_num' in response_data else 0
+                print(f"Total count={total_num} from {server} (fallback)")
+                logging.info("Total count=%s from %s (fallback)", total_num, server)
+            except Exception as e2:
+                print("Fallback parse also failed:", e2)
+                logging.error("Fallback parse also failed: %s", e2)
+                return
+        else:
+            return
+
+    # If count is zero with library segment, try once without segment to accommodate servers
+    if total_num == 0 and lib_segment:
+        try:
+            fallback_url = api+f'search?num=0&sort=timestamp&sort_order=desc'
+            print('Count is 0; retrying count without library segment: ', fallback_url)
+            logging.info('Count is 0; retrying count without library segment: %s', fallback_url)
+            r=requests.get(fallback_url, verify=False, timeout=(timeout, 30))
+            r.raise_for_status()
+            response_data = r.json()
+            total_num = int(response_data['total_num']) if 'total_num' in response_data else 0
+            print(f"Total count (fallback)={total_num} from {server}")
+            logging.info("Total count (fallback)=%s from %s", total_num, server)
+        except Exception as e2:
+            print("Fallback count request failed:", e2)
+            logging.error("Fallback count request failed: %s", e2)
+    
 
     # Update book count and calculate new books in sites database
     try:
@@ -3268,22 +3582,19 @@ def build_index(dir=data_dir):
                 # print()
                 # print(f"Saving summary by batch: {len(summaries)}")    
                 # print(summaries)
-                # index_t.upsert_all(summaries, batch_size=1000, pk='uuid')
-                # index_t.insert_all(summaries, batch_size=1000, pk='uuid')
+                # Prefer upsert to avoid UNIQUE constraint errors when merging multiple site DBs
                 try:
-                    index_t.insert_all(summaries, batch_size=batch_size)
+                    index_t.upsert_all(summaries, batch_size=batch_size, pk='uuid')
                 except Exception as e:
-                    # dump = [(s['uuid'],s['links']) for s in summaries]
-                    # print(dump)
                     print()
-                    print("UUID collisions. Probalbly a site duplicate")
-                    logging.error("UUID collisions. Probalbly a site duplicate")
-                    print(e)
-                    logging.error("Error: %s", e)
+                    print("Upsert batch failed; attempting insert_all as fallback (may hit UNIQUE errors)")
+                    logging.error("Upsert batch failed: %s", e)
+                    try:
+                        index_t.insert_all(summaries, batch_size=batch_size)
+                    except Exception as e2:
+                        print("insert_all also failed:", e2)
+                        logging.error("insert_all also failed: %s", e2)
                     print()
-
-                    # index_t.upsert_all(summaries, batch_size=batch_size, pk='uuid')
-                    # TODO Some ebooks could be missed. We need to compute the batch list, insert new ebooks and update the site index
 
                 # print("Saved")
                 # print()
@@ -3291,13 +3602,17 @@ def build_index(dir=data_dir):
 
     # print()
     # print("saving summary")    
-    # index_t.upsert_all(summaries, batch_size=1000, pk='uuid')
-    # index_t.insert_all(summaries, batch_size=1000, pk='uuid')
+    # Final flush: upsert remaining rows by uuid
     try:
-        index_t.insert_all(summaries, batch_size=batch_size)
-    except:
-        print("sqlite3.IntegrityError: UNIQUE constraint failed: summary.uuid")
-        logging.error("sqlite3.IntegrityError: UNIQUE constraint failed: summary.uuid")
+        index_t.upsert_all(summaries, batch_size=batch_size, pk='uuid')
+    except Exception as e:
+        print("Final upsert failed; attempting insert_all:", e)
+        logging.error("Final upsert failed: %s", e)
+        try:
+            index_t.insert_all(summaries, batch_size=batch_size)
+        except Exception as e2:
+            print("Final insert_all failed:", e2)
+            logging.error("Final insert_all failed: %s", e2)
     # print("summary done")
     # print()
     
