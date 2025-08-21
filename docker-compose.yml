@@ -8,11 +8,23 @@ services:
     ports:
       - "5003:5003"
     volumes:
-      - /opt/shodantest2:/data
+      - calishot_data:/data
+      - ./calishot_webtemplates:/app/calishot_webtemplates
+      - ./calishot_web/templates:/app/calishot_web/templates
+      - ./books:/app/books
+      - ./data:/app/data
+
     environment:
       - DATA_DIR=/data
+      - FLASK_APP=calishot_web/app.py
+      - FLASK_ENV=development
+    working_dir: /app
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5003"]
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  calishot_data:

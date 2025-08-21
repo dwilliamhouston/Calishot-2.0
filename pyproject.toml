@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calishot-web"
+version = "0.1.0"
+description = "Calishot web interface and utilities"
+authors = [{ name = "Calishot" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "Flask>=2.2",
+  "requests>=2.31",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pyinstaller>=6.4",
+  "build>=1.2.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/dwilliamhouston/Calishot-2.0"
+
+[project.scripts]
+calishot-web = "calishot_web.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["calishot_web*"]
+
+[tool.setuptools.package-data]
+"calishot_web" = [
+  "templates/*.html",
+  "templates/**/*.html",
+  "static/*",
+  "static/**/*",
+]
+
+[tool.setuptools.py-modules]
+py-modules = ["demeter"]

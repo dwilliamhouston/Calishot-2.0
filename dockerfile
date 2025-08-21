@@ -1,31 +1,51 @@
-# Creating a Dockerfile for Python 3
-# Use an existing base image from Docker Hub
-FROM alpine:latest
+# Use Python alpine as base image
+FROM python:3.9-alpine
 
-# Set the working directory inside the container and create /mnt/database as VOLUME
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    DATA_DIR=/data \
+    FLASK_APP=calishot_web/app.py \
+    FLASK_ENV=development
+
+# Install minimal system dependencies for Alpine (crond is built-in via busybox)
+# Runtime libs and certs
+RUN apk add --no-cache ca-certificates libffi openssl && update-ca-certificates
+
+# Set working directory
 WORKDIR /app
 
-# Copy the application files from the host to the container
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+
+# Install build dependencies (for packages like gevent) then remove them after pip install
+RUN apk add --no-cache --virtual .build-deps build-base linux-headers musl-dev python3-dev libffi-dev openssl-dev && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir flask shodan requests python-dotenv gunicorn && \
+    apk del .build-deps
+
+# Copy application files
 COPY . .
 
-# Install any required dependencies
-RUN apk update && apk add --no-cache python3 pipx bash py3-pip
+# Create necessary directories
+RUN mkdir -p ${DATA_DIR} /var/log/calishot /app/books /app/calishot_webtemplates && \
+    touch /var/log/cron.log
 
-# Setup VENV and run requirements.txt
-RUN python3 -m venv /venv
+# Install cron schedule (Alpine busybox crond reads /etc/crontabs/root)
+# If you already have a 'crontab' file in repo, copy it to the expected Alpine location
+COPY crontab /etc/crontabs/root
+RUN chmod 0644 /etc/crontabs/root
 
-# Install Datasette using pip
-RUN pipx ensurepath
-RUN export PATH=$PATH:/root/.local/bin && source /root/.bashrc && \
-    pipx install --include-deps --force datasette && \
-    pipx install --include-deps --force datasette-json-html && \
-    pipx install --include-deps --force datasette-pretty-json && \
-    pipx install --include-deps --force datasette-block-robots
+# Expose the web server port
+EXPOSE 5003
 
-    RUN /venv/bin/pip install -r requirements.txt
+# Set the data directory as a volume
+VOLUME ["/data", "/app/books", "/app/calishot_webtemplates"]
 
-# Expose a port on the container
-EXPOSE 5000
+# Startup: run crond in background and gunicorn in foreground
+RUN echo '#!/bin/sh\n\n# Start cron (busybox crond) in background\ncrond -b -l 8 -L /var/log/cron.log\n\n# Start gunicorn for Flask app\nexec gunicorn --bind 0.0.0.0:5003 "calishot_web.app:create_app()"\n' > /startup.sh && \
+    chmod +x /startup.sh
 
-# Expose a local host directory to the container
-CMD ["/bin/bash", "-c", "/root/.local/bin/datasette -p 5000 -h 0.0.0.0 /app/data/index.db --config sql_time_limit_ms:50000 --config allow_download:off --config max_returned_rows:2000 --config num_sql_threads:10 --config allow_csv_stream:off --metadata metadata.json"]
+CMD ["/startup.sh"]

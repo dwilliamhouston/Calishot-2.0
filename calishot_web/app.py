@@ -1,21 +1,70 @@
-from flask import Flask, render_template, jsonify, send_from_directory, make_response
+from flask import Flask, render_template, jsonify, send_from_directory, make_response, request
 import sqlite3
 import os
+import sys
 import logging
 from pathlib import Path
 from functools import wraps
+import threading
+import uuid as uuidlib
+import io
+import contextlib
 
-app = Flask(__name__, static_folder='static')
+# Import demeter CLI handlers to reuse logic
+import demeter  # demeter is shipped as a py-module via packaging
+
+app = Flask(
+    __name__,
+    static_folder=str(resource_path('calishot_web/static')),
+    template_folder=str(resource_path('calishot_web/templates')),
+)
+
+def resource_path(relative_path: str) -> Path:
+    """Return absolute path to resource, works for dev and for PyInstaller.
+
+    When frozen by PyInstaller, data files are unpacked to a temp folder pointed by sys._MEIPASS.
+    Otherwise, use the project root directory.
+    """
+    base = getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1])
+    return Path(base) / relative_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Simple in-memory job store for long-running demeter operations (e.g., scrape)
+JOBS = {}
+JOB_THREADS = {}
+CANCEL_EVENT = threading.Event()
+
+def _capture_demeter_stdout(callable_func, args_namespace):
+    """Run a demeter handler function and capture printed output as string."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        try:
+            callable_func(args_namespace)
+        except Exception as e:
+            print(f"Error: {e}")
+    return buf.getvalue()
+
+def _mk_ns(**kwargs):
+    """Create a simple argparse-like namespace object."""
+    return type("NS", (), kwargs)
+
 def get_country_counts():
     """Get count of sites per country from the database."""
     conn = None
     try:
-        db_path = Path('data/sites.db')
+        # Candidate locations for the database
+        env_dir = os.getenv('CALISHOT_DATA_DIR')
+        candidates = []
+        if env_dir:
+            candidates.append(Path(env_dir) / 'sites.db')
+        candidates.append(resource_path('data/sites.db'))
+        candidates.append(Path.cwd() / 'data' / 'sites.db')
+        candidates.append(Path.home() / '.calishot' / 'data' / 'sites.db')
+
+        db_path = next((p for p in candidates if p and p.exists()), candidates[0])
         if not db_path.exists():
             error_msg = f"Database not found at {db_path.absolute()}"
             logger.error(error_msg)
@@ -95,10 +144,19 @@ def index():
         logger.error(f"Error rendering index: {e}")
         return "An error occurred while loading the page. Please check the logs.", 500
 
+@app.route('/demeter')
+def demeter_page():
+    try:
+        response = make_response(render_template('demeter.html'))
+        return add_csp_header(response)
+    except Exception as e:
+        logger.error(f"Error rendering demeter page: {e}")
+        return "Failed to render Demeter UI", 500
+
 # Serve static files
 @app.route('/static/<path:path>')
 def serve_static(path):
-    return send_from_directory('static', path)
+    return send_from_directory(app.static_folder, path)
 
 @app.route('/api/country_counts')
 def api_country_counts():
@@ -128,6 +186,139 @@ def api_country_counts():
         logger.error(error_msg, exc_info=True)
         return jsonify({"error": error_msg}), 500
 
+# --------------------- Demeter API ---------------------
+@app.post('/api/demeter/host/list')
+def demeter_host_list():
+    ns = _mk_ns()
+    out = _capture_demeter_stdout(demeter.handle_host_list, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/list_all')
+def demeter_host_list_all():
+    ns = _mk_ns()
+    out = _capture_demeter_stdout(demeter.handle_host_list_all, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/add')
+def demeter_host_add():
+    data = request.get_json(silent=True) or {}
+    hosturl = data.get('hosturl') or []
+    if isinstance(hosturl, str):
+        hosturl = [hosturl]
+    ns = _mk_ns(hosturl=hosturl)
+    out = _capture_demeter_stdout(demeter.handle_host_add, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/rm')
+def demeter_host_rm():
+    data = request.get_json(silent=True) or {}
+    hostid = data.get('hostid')
+    ns = _mk_ns(hostid=str(hostid) if hostid is not None else None)
+    out = _capture_demeter_stdout(demeter.handle_host_rm, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/enable')
+def demeter_host_enable():
+    data = request.get_json(silent=True) or {}
+    ns = _mk_ns(
+        enable_all=bool(data.get('enable_all', False)),
+        enable_country=data.get('enable_country'),
+        hostid=str(data.get('hostid')) if data.get('hostid') is not None else None,
+    )
+    out = _capture_demeter_stdout(demeter.handle_host_enable, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/disable')
+def demeter_host_disable():
+    data = request.get_json(silent=True) or {}
+    ns = _mk_ns(
+        disable_all=bool(data.get('disable_all', False)),
+        hostid=str(data.get('hostid')) if data.get('hostid') is not None else None,
+    )
+    out = _capture_demeter_stdout(demeter.handle_host_disable, ns)
+    return jsonify({"output": out})
+
+@app.post('/api/demeter/host/stats')
+def demeter_host_stats():
+    data = request.get_json(silent=True) or {}
+    ns = _mk_ns(hostid=str(data.get('hostid')) if data.get('hostid') is not None else None)
+    out = _capture_demeter_stdout(demeter.handle_host_stats, ns)
+    return jsonify({"output": out})
+
+def _run_scrape_job(job_id, opts):
+    # If cancellation requested, exit early
+    if CANCEL_EVENT.is_set():
+        JOBS[job_id]['status'] = 'cancelled'
+        JOBS[job_id]['log'] = (JOBS[job_id].get('log') or '') + "Cancelled before start.\n"
+        return
+
+    ns = _mk_ns(
+        extension=opts.get('extension', 'epub'),
+        outputdir=opts.get('outputdir', 'books'),
+        authors=opts.get('authors'),
+        titles=opts.get('titles'),
+    )
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        try:
+            # Note: demeter does not support mid-run cancellation; this is best-effort.
+            if not CANCEL_EVENT.is_set():
+                demeter.handle_scrape_run(ns)
+            else:
+                print("Cancellation requested. Skipping run.")
+        except Exception as e:
+            print(f"Error: {e}")
+    # Determine final status
+    if CANCEL_EVENT.is_set():
+        JOBS[job_id]['status'] = 'cancelled'
+    else:
+        JOBS[job_id]['status'] = 'completed'
+    JOBS[job_id]['log'] = buf.getvalue()
+
+@app.post('/api/demeter/scrape/run')
+def demeter_scrape_run():
+    data = request.get_json(silent=True) or {}
+    job_id = str(uuidlib.uuid4())
+    # If cancellation has been requested, do not start
+    if CANCEL_EVENT.is_set():
+        JOBS[job_id] = {"status": "cancelled", "log": "Cancellation requested. Not starting new scrape.\n"}
+        return jsonify({"job_id": job_id, "status": JOBS[job_id]['status']})
+    JOBS[job_id] = {"status": "running", "log": "Starting scrape...\n"}
+    thread = threading.Thread(target=_run_scrape_job, args=(job_id, data), daemon=True)
+    JOB_THREADS[job_id] = thread
+    thread.start()
+    return jsonify({"job_id": job_id, "status": JOBS[job_id]['status']})
+
+@app.get('/api/demeter/scrape/status')
+def demeter_scrape_status():
+    job_id = request.args.get('job_id')
+    job = JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "job not found"}), 404
+    return jsonify(job)
+
+@app.post('/api/demeter/scrape/cancel_all')
+def demeter_scrape_cancel_all():
+    # Signal cancellation for future runs and mark running jobs as cancelled (best effort)
+    CANCEL_EVENT.set()
+    cancelled = 0
+    for jid, meta in list(JOBS.items()):
+        if meta.get('status') == 'running':
+            meta['status'] = 'cancelled'
+            meta['log'] = (meta.get('log') or '') + "Cancellation requested. This may not stop immediately.\n"
+            cancelled += 1
+    return jsonify({"cancelled_jobs": cancelled, "message": "Cancellation requested."})
+
+@app.post('/api/demeter/scrape/reset_cancel')
+def demeter_scrape_reset_cancel():
+    """Clear the cancellation flag so new scrapes can start."""
+    try:
+        CANCEL_EVENT.clear()
+        return jsonify({"message": "Cancellation flag cleared. New scrapes can start."})
+    except Exception as e:
+        logger.error(f"Error clearing cancel flag: {e}")
+        return jsonify({"error": "Failed to clear cancellation flag"}), 500
+
 @app.route('/api/debug/countries')
 def debug_countries():
     """Debug endpoint to list all available country codes in the world map."""
@@ -143,4 +334,7 @@ def debug_countries():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5003, host='0.0.0.0')
+    # On Windows with Python 3.13, Werkzeug's watchdog reloader may error.
+    # Disable the reloader on Windows to avoid TypeError: 'handle' must be a _ThreadHandle
+    use_reloader = False if os.name == 'nt' else True
+    app.run(debug=True, port=5003, host='0.0.0.0', use_reloader=use_reloader)

@@ -1,0 +1,6 @@
+# Include package data for source distributions
+recursive-include calishot_web/templates *.html
+recursive-include calishot_web/static *
+include README.md
+include config.ini
+recursive-include data *

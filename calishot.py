@@ -12,7 +12,7 @@ logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.E
 #####################
 # Flags for testing #
 #####################
-run_search_by_country = False
+run_search_by_country = True
 run_book_search = True
 run_check_calibre_list = True
 run_output_online_db = True
