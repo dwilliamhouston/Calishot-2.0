@@ -23,13 +23,12 @@ import sys
 import subprocess
 import shutil
 from pathlib import Path
-from urllib.request import urlopen
+# No network fetch of database files in this installer
 
 REPO = os.getenv("CALISHOT_REPO", "dwilliamhouston/Calishot-2.0")
 GIT_REF = os.getenv("CALISHOT_GIT_REF", "main")
 RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{GIT_REF}"
 
-SITES_DB_URL = f"{RAW_BASE}/data/sites.db"
 TARGET_DATA_DIR = Path.home() / ".calishot" / "data"
 TARGET_DB = TARGET_DATA_DIR / "sites.db"
 
@@ -69,17 +68,14 @@ def pip_install_from_github() -> None:
 
 
 def download_sites_db() -> None:
+    """No-op: this installer does not download database files.
+
+    We create the default data directory to guide users where to place
+    their database (e.g., sites.db) if needed.
+    """
     TARGET_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if TARGET_DB.exists() and TARGET_DB.stat().st_size > 0:
-        print(f"sites.db already present at {TARGET_DB}")
-        return
-    print(f"Downloading sites.db from {SITES_DB_URL}")
-    with urlopen(SITES_DB_URL) as resp:  # nosec - trusted GitHub raw URL
-        data = resp.read()
-    tmp = TARGET_DB.with_suffix(".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(TARGET_DB)
-    print(f"Saved {TARGET_DB} ({TARGET_DB.stat().st_size} bytes)")
+    print("Skipping download of database files.")
+    print(f"If you have a sites.db, place it here: {TARGET_DATA_DIR}")
 
 
 def main() -> None:
@@ -94,7 +90,7 @@ def main() -> None:
     print("  calishot-web")
     print("\nEnvironment options:")
     print("  HOST=127.0.0.1 PORT=5003 calishot-web")
-    print("\nData directory:")
+    print("\nData directory (create or copy your DBs here if needed):")
     print(f"  {TARGET_DATA_DIR}")
 
 
