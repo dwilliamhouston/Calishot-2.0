@@ -24,6 +24,8 @@ import subprocess
 import shutil
 from pathlib import Path
 # No network fetch of database files in this installer
+from urllib.request import urlopen
+import sysconfig
 
 REPO = os.getenv("CALISHOT_REPO", "dwilliamhouston/Calishot-2.0")
 GIT_REF = os.getenv("CALISHOT_GIT_REF", "main")
@@ -31,6 +33,7 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{GIT_REF}"
 
 TARGET_DATA_DIR = Path.home() / ".calishot" / "data"
 TARGET_DB = TARGET_DATA_DIR / "sites.db"
+DEMETER_RAW_URL = f"https://raw.githubusercontent.com/{REPO}/{GIT_REF}/demeter.py"
 
 
 def run(cmd: list[str]) -> None:
@@ -78,12 +81,38 @@ def download_sites_db() -> None:
     print(f"If you have a sites.db, place it here: {TARGET_DATA_DIR}")
 
 
+def ensure_demeter_module() -> None:
+    """Ensure 'demeter' can be imported.
+
+    If import fails (because the released wheel didn't include py-modules),
+    download demeter.py from the repo and place it into site-packages so that
+    `import demeter` succeeds.
+    """
+    try:
+        import demeter  # noqa: F401
+        print("'demeter' module already present.")
+        return
+    except Exception:
+        pass
+
+    site_pkgs = Path(sysconfig.get_paths().get("purelib") or sysconfig.get_paths()["platlib"])  # type: ignore[index]
+    dest = site_pkgs / "demeter.py"
+    print(f"'demeter' not found; fetching from {DEMETER_RAW_URL}")
+    with urlopen(DEMETER_RAW_URL) as resp:  # nosec - GitHub raw
+        data = resp.read()
+    tmp = dest.with_suffix(".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(dest)
+    print(f"Installed demeter module at {dest}")
+
+
 def main() -> None:
     print("Calishot installer starting...\n")
     ensure_python_version()
     ensure_pip()
     pip_install_from_github()
     download_sites_db()
+    ensure_demeter_module()
 
     print("\nInstallation complete!\n")
     print("Run the server with:")
