@@ -1,0 +1,7 @@
+Flask>=2.2
+requests>=2.31
+python-dotenv>=1.0
+
+[dev]
+pyinstaller>=6.4
+build>=1.2.1

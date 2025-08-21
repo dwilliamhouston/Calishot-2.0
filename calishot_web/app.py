@@ -13,20 +13,21 @@ import contextlib
 # Import demeter CLI handlers to reuse logic
 import demeter  # demeter is shipped as a py-module via packaging
 
+def resource_path(relative_path: str) -> Path:
+    """Return absolute path to resource, works for dev, installed, and PyInstaller.
+
+    - When frozen by PyInstaller, resources live under sys._MEIPASS.
+    - When installed (normal case), use the package directory of this file.
+    - In editable/dev mode, this also resolves correctly.
+    """
+    base = getattr(sys, '_MEIPASS', Path(__file__).resolve().parent)
+    return Path(base) / relative_path
+
 app = Flask(
     __name__,
-    static_folder=str(resource_path('calishot_web/static')),
-    template_folder=str(resource_path('calishot_web/templates')),
+    static_folder=str(resource_path('static')),
+    template_folder=str(resource_path('templates')),
 )
-
-def resource_path(relative_path: str) -> Path:
-    """Return absolute path to resource, works for dev and for PyInstaller.
-
-    When frozen by PyInstaller, data files are unpacked to a temp folder pointed by sys._MEIPASS.
-    Otherwise, use the project root directory.
-    """
-    base = getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1])
-    return Path(base) / relative_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
