@@ -29,6 +29,7 @@ calishot-web = "calishot_web.cli:main"
 
 [tool.setuptools]
 include-package-data = true
+py-modules = ["demeter"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -41,6 +42,3 @@ include = ["calishot_web*"]
   "static/*",
   "static/**/*",
 ]
-
-[tool.setuptools.py-modules]
-py-modules = ["demeter"]
