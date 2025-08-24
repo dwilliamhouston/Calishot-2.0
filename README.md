@@ -10,6 +10,27 @@ Requirements:
 - Python 3.9+ (macOS/Linux tested)
 - Optional: use a virtual environment
 
+### 0) Cross-platform installer (Windows/macOS/Linux)
+
+This installer installs the app and dependencies only. It does not include or copy any files from the repo `books/` or `data/` directories.
+
+```
+# From the repo root
+python installers/install.py
+
+# Windows convenience launcher
+powershell -ExecutionPolicy Bypass -File installers/install.ps1
+
+# macOS/Linux convenience launcher
+bash installers/install.sh
+```
+
+After install, run:
+
+```
+calishot-web
+```
+
 ### 1) Quick install (recommended)
 
 Installs from GitHub, creates the data directory, and ensures the `demeter` module is present.

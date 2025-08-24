@@ -1,41 +1,44 @@
 #!/usr/bin/env python3
 """
-Calishot one-shot installer from GitHub.
+Cross-platform installer for Calishot suite (Calishot, Demeter, Calishot Web).
 
-What it does:
-- Ensures Python and pip are available.
-- Installs calishot-web (and demeter module from the same repo) via pip from GitHub.
-- Downloads the runtime database (sites.db) into a user-writable directory: ~/.calishot/data/
-- Prints how to start the server.
+What it does (macOS, Windows, Linux):
+- Verifies Python 3.9+ and pip are available
+- Installs calishot-web (which contains the web app and CLI) from GitHub
+- Ensures the 'demeter' module can be imported (drops demeter.py into site-packages if missing)
+- Creates a writable data directory at ~/.calishot/data (or %USERPROFILE%\.calishot\data on Windows)
+- Does NOT bundle or copy any files from the repository's 'books/' or 'data/' directories
 
 Usage:
-  python install_from_github.py              # installs from default branch (main)
-  CALISHOT_GIT_REF=dev python install_from_github.py  # install from a specific branch or tag
+  python installers/install.py
 
-After install:
+Advanced:
+  CALISHOT_REPO=dwilliamhouston/Calishot-2.0 CALISHOT_GIT_REF=main python installers/install.py
+
+After install, run:
   calishot-web
+
+Optionally set:
+  HOST=127.0.0.1 PORT=5003 calishot-web
 
 """
 from __future__ import annotations
 
 import os
 import sys
-import subprocess
 import shutil
-from pathlib import Path
-# No network fetch of database files in this installer
-from urllib.request import urlopen
+import subprocess
 import sysconfig
+from pathlib import Path
+from urllib.request import urlopen
 import tempfile
 import zipfile
 
 REPO = os.getenv("CALISHOT_REPO", "dwilliamhouston/Calishot-2.0")
 GIT_REF = os.getenv("CALISHOT_GIT_REF", "main")
-RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{GIT_REF}"
+ARCHIVE_URL = f"https://github.com/{REPO}/archive/refs/heads/{GIT_REF}.zip"
 
 TARGET_DATA_DIR = Path.home() / ".calishot" / "data"
-TARGET_DB = TARGET_DATA_DIR / "sites.db"
-ARCHIVE_URL = f"https://github.com/{REPO}/archive/refs/heads/{GIT_REF}.zip"
 
 
 def run(cmd: list[str]) -> None:
@@ -60,36 +63,16 @@ def ensure_pip() -> None:
 
 
 def pip_install_from_github() -> None:
-    # Prefer VCS install if git is available, otherwise use archive URL
     use_git = shutil.which("git") is not None
     if use_git:
         url = f"git+https://github.com/{REPO}.git@{GIT_REF}#subdirectory=."
     else:
-        # Use archive zip (no git required)
-        # refs/heads for branches, refs/tags for tags – assume branch unless TAG is specified in ref
         url = f"https://github.com/{REPO}/archive/refs/heads/{GIT_REF}.zip"
     print(f"Installing Calishot from: {url}")
     run([sys.executable, "-m", "pip", "install", url])
 
 
-def download_sites_db() -> None:
-    """No-op: this installer does not download database files.
-
-    We create the default data directory to guide users where to place
-    their database (e.g., sites.db) if needed.
-    """
-    TARGET_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print("Skipping download of database files.")
-    print(f"If you have a sites.db, place it here: {TARGET_DATA_DIR}")
-
-
 def ensure_demeter_module() -> None:
-    """Ensure 'demeter' can be imported.
-
-    If import fails (because the released wheel didn't include py-modules),
-    extract demeter.py from the repository archive and place it into
-    site-packages so that `import demeter` succeeds.
-    """
     try:
         import demeter  # noqa: F401
         print("'demeter' module already present.")
@@ -100,15 +83,19 @@ def ensure_demeter_module() -> None:
     site_pkgs = Path(sysconfig.get_paths().get("purelib") or sysconfig.get_paths()["platlib"])  # type: ignore[index]
     dest = site_pkgs / "demeter.py"
     print("'demeter' not found; attempting to extract from repository archive...")
+
+    # Try downloading the repo archive and extract demeter.py (works even if file moves in repo)
     try:
         with tempfile.TemporaryDirectory() as td:
             zip_path = Path(td) / "repo.zip"
+            # Prefer the heads URL for branches; callers can change CALISHOT_GIT_REF to a tag if desired
             archive_url = ARCHIVE_URL
             print(f"Downloading archive: {archive_url}")
             with urlopen(archive_url) as resp:  # nosec - GitHub
                 zip_path.write_bytes(resp.read())
 
             with zipfile.ZipFile(zip_path) as zf:
+                # Find any entry that ends with '/demeter.py'
                 demeter_member = None
                 for name in zf.namelist():
                     if name.lower().endswith("/demeter.py") or name.lower().endswith("\\demeter.py") or name.lower().endswith("demeter.py"):
@@ -127,12 +114,18 @@ def ensure_demeter_module() -> None:
         raise RuntimeError(f"Failed to install 'demeter' module from archive: {e}")
 
 
+def ensure_data_dir() -> None:
+    TARGET_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Created/verified data directory at: {TARGET_DATA_DIR}")
+    print("Note: This installer does NOT copy any repo data/ or books/ files.")
+
+
 def main() -> None:
-    print("Calishot installer starting...\n")
+    print("Calishot cross-platform installer starting...\n")
     ensure_python_version()
     ensure_pip()
     pip_install_from_github()
-    download_sites_db()
+    ensure_data_dir()
     ensure_demeter_module()
 
     print("\nInstallation complete!\n")
@@ -140,7 +133,7 @@ def main() -> None:
     print("  calishot-web")
     print("\nEnvironment options:")
     print("  HOST=127.0.0.1 PORT=5003 calishot-web")
-    print("\nData directory (create or copy your DBs here if needed):")
+    print("\nData directory (place your sites.db here):")
     print(f"  {TARGET_DATA_DIR}")
 
 

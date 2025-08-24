@@ -21,7 +21,6 @@ pyinstaller \
   --clean \
   --add-data "calishot_web/templates:calishot_web/templates" \
   --add-data "calishot_web/static:calishot_web/static" \
-  --add-data "data:data" \
   -p . \
   calishot_web/cli.py
 
