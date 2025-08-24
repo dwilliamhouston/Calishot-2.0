@@ -12,24 +12,38 @@ Requirements:
 
 ### 0) Cross-platform installer (Windows/macOS/Linux)
 
-This installer installs the app and dependencies only. It does not include or copy any files from the repo `books/` or `data/` directories.
+This installer sets up the app and dependencies only. It does not include or copy any files from the repo `books/` or `data/` directories.
 
+Environment overrides (optional):
+- `CALISHOT_REPO` (default: `dwilliamhouston/Calishot-2.0`)
+- `CALISHOT_GIT_REF` (default: `main`)
+
+Commands (run from repo root):
+
+Windows (PowerShell):
 ```
-# From the repo root
-python installers/install.py
+powershell -ExecutionPolicy Bypass -File installers\install.ps1
+```
 
-# Windows convenience launcher
-powershell -ExecutionPolicy Bypass -File installers/install.ps1
-
-# macOS/Linux convenience launcher
+macOS/Linux:
+```
 bash installers/install.sh
+# or
+python installers/install.py
 ```
 
-After install, run:
-
+After install, run the app:
 ```
 calishot-web
+# or if PATH is not set up yet
+python -m calishot_web.cli
 ```
+
+Windows PATH tip: the console script is installed into your Python Scripts folder. If `calishot-web` is not found, either use the module form above or add the Scripts path to your PATH. To find it:
+```
+python -c "import sysconfig, pathlib; print(pathlib.Path(sysconfig.get_paths().get('scripts') or sysconfig.get_paths()['scripts']))"
+```
+Then you can run it directly, e.g. `C:\\Users\\<you>\\AppData\\Roaming\\Python\\Python3x\\Scripts\\calishot-web.exe`.
 
 ### 1) Quick install (recommended)
 
