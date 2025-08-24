@@ -114,6 +114,15 @@ def init_sites_db(dir=data_dir):
         "failed_attempts": int,  # Number of consecutive failed attempts
         "last_failed": str,  # Timestamp of last failure
         "last_success": str,  # Timestamp of last success
+<<<<<<< HEAD
+        "last_scrape": str,  # Timestamp of last scrape
+        "scrapes": int,  # Number of scrapes
+        "downloads": int,  # Number of downloads
+        "last_download": str,  # Timestamp of last download
+        "demeter_id": int,  # Demeter ID
+        "active": bool  # Whether the site is active
+=======
+>>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
     }
     
     # Create the table if it doesn't exist
@@ -138,6 +147,10 @@ def init_sites_db(dir=data_dir):
                 if column in ["last_book_count", "new_books"]:
                     print(f"Initializing {column} to 0 for all existing records")
                     db.conn.execute(f"UPDATE sites SET {column} = 0 WHERE {column} IS NULL")
+<<<<<<< HEAD
+                
+=======
+>>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
     
     # Enable WAL mode for better concurrency
     db.conn.execute('PRAGMA journal_mode=WAL;')
@@ -145,6 +158,47 @@ def init_sites_db(dir=data_dir):
     print("Database initialization complete")
     logging.info("Database initialization complete")
     return db
+
+##############################
+# Migration: demeter_id fill #
+##############################
+def migrate_demeter_ids(db: Database) -> int:
+    """
+    Backfill sequential demeter_id values for rows where demeter_id is NULL or 0.
+    Starts from current MAX(demeter_id) + 1. Returns number of rows updated.
+    """
+    logging.info("****migrate_demeter_ids****")
+    try:
+        cur = db.conn.cursor()
+        row = cur.execute("SELECT COALESCE(MAX(demeter_id), 0) FROM sites").fetchone()
+        start_id = (row[0] or 0) + 1
+
+        # Order rows for stable assignment: non-null last_success/check first, then by url
+        rows = list(
+            cur.execute(
+                """
+                SELECT uuid
+                FROM sites
+                WHERE demeter_id IS NULL OR demeter_id = 0
+                ORDER BY (last_success IS NULL), last_success,
+                         (last_check IS NULL), last_check,
+                         url
+                """
+            )
+        )
+
+        next_id = start_id
+        for (uuid_val,) in rows:
+            cur.execute("UPDATE sites SET demeter_id = ? WHERE uuid = ?", (next_id, uuid_val))
+            next_id += 1
+
+        db.conn.commit()
+        updated = len(rows)
+        logging.info(f"migrate_demeter_ids updated {updated} rows (start_id={start_id})")
+        return updated
+    except Exception as e:
+        logging.error("migrate_demeter_ids failed: %s", str(e), exc_info=True)
+        raise
 
 ########################################
 # Save sites found into Sites Database #
@@ -204,10 +258,19 @@ def save_site(db: Database, site):
                     "last_online": str,
                     "last_check": str,
                     "error": int,
+<<<<<<< HEAD
+                    "error_message": str,
+                    "book_count": int,
+                    "last_book_count": int,
+                    "new_books": int,
+                    "libraries_count": int,
+                    "demeter_id": int
+=======
                     "book_count": int,
                     "last_book_count": int,
                     "new_books": int,
                     "libraries_count": int
+>>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
                 },
                 pk="uuid"
             )
@@ -223,6 +286,14 @@ def save_site(db: Database, site):
             for col, col_type in numeric_columns.items():
                 if col not in table.columns_dict:
                     table.add_column(col, col_type, default=0)
+<<<<<<< HEAD
+            # Ensure demeter_id and error_message columns exist
+            if 'demeter_id' not in table.columns_dict:
+                table.add_column('demeter_id', int, default=0)
+            if 'error_message' not in table.columns_dict:
+                table.add_column('error_message', str, default="")
+=======
+>>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
         
         # Get existing record if it exists
         existing = None
@@ -292,7 +363,17 @@ def save_site(db: Database, site):
                     site['last_book_count'] = 0
                 if 'new_books' not in site or site['new_books'] is None:
                     site['new_books'] = 0
+<<<<<<< HEAD
+                # Assign demeter_id for new records
+                if 'demeter_id' not in site or site['demeter_id'] in (None, 0, ''):
+                    try:
+                        next_id = db.conn.execute("SELECT COALESCE(MAX(demeter_id), 0) + 1 FROM sites").fetchone()[0]
+                    except Exception:
+                        next_id = 1
+                    site['demeter_id'] = next_id
+=======
             
+>>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
             # Preserve existing country if not explicitly set in the update
             if 'country' not in site or not site['country']:
                 site['country'] = existing.get('country', '')
