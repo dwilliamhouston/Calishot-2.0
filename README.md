@@ -10,7 +10,7 @@ Requirements:
 - Python 3.9+ (macOS/Linux tested)
 - Optional: use a virtual environment
 
-### 0) Cross-platform installer (Windows/macOS/Linux)
+### 1) Cross-platform installer (Windows/macOS/Linux)
 
 This installer sets up the app and dependencies only. It does not include or copy any files from the repo `books/` or `data/` directories.
 
