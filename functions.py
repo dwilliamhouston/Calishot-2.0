@@ -29,9 +29,10 @@ from requests.adapters import HTTPAdapter
 import urllib3
 import logging
 import configparser
+import calishot_logging
 
-# Configure logging
-logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.DEBUG)
+# Configure project-wide logging and pin to project CWD
+calishot_logging.init_logging(logging.INFO, log_file=Path.cwd() / 'calishot.log')
 
 # Initialize Shodan API
 def get_shodan_api_key():
@@ -105,58 +106,19 @@ def init_sites_db(dir=data_dir):
         "status": str,
         "last_online": str,
         "last_check": str,
-        "error": str,  # Changed from int to str to store error messages
-        "error_message": str,  # Additional field for detailed error messages
-        "book_count": int,  # Current book count
-        "last_book_count": int,  # Previous book count
-        "new_books": int,  # Number of new books since last check
-        "libraries_count": int,  # Number of libraries
-        "failed_attempts": int,  # Number of consecutive failed attempts
-        "last_failed": str,  # Timestamp of last failure
-        "last_success": str,  # Timestamp of last success
-<<<<<<< HEAD
-        "last_scrape": str,  # Timestamp of last scrape
-        "scrapes": int,  # Number of scrapes
-        "downloads": int,  # Number of downloads
-        "last_download": str,  # Timestamp of last download
-        "demeter_id": int,  # Demeter ID
-        "active": bool  # Whether the site is active
-=======
->>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
+        "error": int,
+        # "schema_version": 1
+        # TODO: add the most common formats
     }
-    
-    # Create the table if it doesn't exist
-    if "sites" not in db.table_names():
-        print("Creating new 'sites' table with schema:", sites_schema)
-        logging.info("Creating new 'sites' table")
-        db["sites"].create(sites_schema, pk="uuid")
-        print("Successfully created 'sites' table")
-    else:
-        print("'sites' table already exists")
-        # Ensure all columns exist in the table
-        table = db["sites"]
-        for column, col_type in sites_schema.items():
-            if column not in table.columns_dict:
-                print(f"Adding missing column '{column}' to 'sites' table with type {col_type.__name__}")
-                logging.info("Adding missing column '%s' to 'sites' table with type %s", column, col_type.__name__)
-                # Add the column with a default value based on type
-                default_value = 0 if col_type == int else ""
-                table.add_column(column, col_type, if_not_exists=True, default=default_value)
-                
-                # If we're adding last_book_count or new_books, initialize them to 0 for existing records
-                if column in ["last_book_count", "new_books"]:
-                    print(f"Initializing {column} to 0 for all existing records")
-                    db.conn.execute(f"UPDATE sites SET {column} = 0 WHERE {column} IS NULL")
-<<<<<<< HEAD
-                
-=======
->>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
-    
-    # Enable WAL mode for better concurrency
-    db.conn.execute('PRAGMA journal_mode=WAL;')
-    
-    print("Database initialization complete")
-    logging.info("Database initialization complete")
+    # Example usage (kept for reference):
+    # db["sites"].create(sites_schema, pk="uuid")
+
+    # if not "sites" in db.table_names():
+    #     db["sites"].create({
+    #     "uuid": str
+    #     }, pk="uuid",)
+
+    db.table("sites", pk='uuid', batch_size=100, alter=True)
     return db
 
 ##############################
@@ -219,182 +181,16 @@ def save_site(db: Database, site):
     - None
     """
     logging.info("****Save Site Function****")
-    
-    # Ensure the site has a UUID
-    if 'uuid' not in site:
-        site['uuid'] = str(uuid.uuid4())
-    
-    # Ensure numeric fields are integers
-    numeric_fields = ['book_count', 'libraries_count', 'last_book_count', 'new_books']
-    for field in numeric_fields:
-        if field in site and site[field] is not None:
-            try:
-                site[field] = int(site[field]) if str(site[field]).strip() != '' else 0
-            except (ValueError, TypeError):
-                site[field] = 0
-        elif field == 'book_count' and 'book_count' not in site:
-            # Don't set a default for book_count if it's not provided
-            continue
-        else:
-            site[field] = 0
-    
-    # Log the site data being saved
-    logging.info("Saving site with data: %s", site)
-    print(f"Saving site: {site}")
-    
-    try:
-        # Ensure the sites table exists and has required columns
-        if 'sites' not in db.table_names():
-            # Create the table if it doesn't exist
-            db["sites"].create(
-                {
-                    "uuid": str,
-                    "url": str,
-                    "hostnames": str,
-                    "ports": str,
-                    "country": str,
-                    "isp": str,
-                    "status": str,
-                    "last_online": str,
-                    "last_check": str,
-                    "error": int,
-<<<<<<< HEAD
-                    "error_message": str,
-                    "book_count": int,
-                    "last_book_count": int,
-                    "new_books": int,
-                    "libraries_count": int,
-                    "demeter_id": int
-=======
-                    "book_count": int,
-                    "last_book_count": int,
-                    "new_books": int,
-                    "libraries_count": int
->>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
-                },
-                pk="uuid"
-            )
-        else:
-            # Add missing columns if they don't exist
-            table = db['sites']
-            numeric_columns = {
-                'book_count': int,
-                'last_book_count': int,
-                'new_books': int,
-                'libraries_count': int
-            }
-            for col, col_type in numeric_columns.items():
-                if col not in table.columns_dict:
-                    table.add_column(col, col_type, default=0)
-<<<<<<< HEAD
-            # Ensure demeter_id and error_message columns exist
-            if 'demeter_id' not in table.columns_dict:
-                table.add_column('demeter_id', int, default=0)
-            if 'error_message' not in table.columns_dict:
-                table.add_column('error_message', str, default="")
-=======
->>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
-        
-        # Get existing record if it exists
-        existing = None
-        if 'url' in site:
-            existing_records = list(db["sites"].rows_where(f"url = ?", [site['url']]))
-            if existing_records:
-                existing = existing_records[0]
-        
-        # Preserve existing values if not provided in the update
-        if existing:
-            # Preserve existing numeric fields if not provided in the update
-            numeric_fields = ['new_books', 'libraries_count', 'failed_attempts']
-            for field in numeric_fields:
-                if field not in site or (field in site and site[field] == 0 and field != 'new_books' and field != 'failed_attempts'):
-                    site[field] = existing.get(field, 0)
-            
-            # Special handling for last_book_count - preserve existing value if not explicitly set
-            if 'last_book_count' not in site or site['last_book_count'] is None:
-                site['last_book_count'] = existing.get('last_book_count', 0)
-            
-            # Handle book counts for existing records
-            if existing:
-                # Get current and previous book counts
-                current_book_count = site.get('book_count')
-                previous_book_count = existing.get('book_count', 0)
-                previous_last_book_count = existing.get('last_book_count', 0)
 
-                # Always recalculate new_books if book_count is present, otherwise use existing value
-                if current_book_count is not None:
-                    try:
-                        current_book_count = int(current_book_count)
-                    except Exception:
-                        current_book_count = 0
-                    try:
-                        previous_book_count = int(previous_book_count)
-                    except Exception:
-                        previous_book_count = 0
-                    new_books = max(0, current_book_count - previous_book_count)
-                    site['new_books'] = new_books
-                    site['last_book_count'] = previous_book_count if previous_book_count > 0 else 0
-                    logging.info(
-                        f"[save_site] Recalculated new_books for {site.get('url')} - Current: {current_book_count}, Previous: {previous_book_count}, New Books: {new_books}")
-                else:
-                    # If book_count not present, preserve existing new_books
-                    site['new_books'] = existing.get('new_books', 0)
-                    site['last_book_count'] = existing.get('last_book_count', 0)
-                    logging.info(f"[save_site] Preserved existing new_books for {site.get('url')}: {site['new_books']}")
-                    
-                    # Log a warning if we detect a change but new_books is 0
-                    if current_book_count != previous_book_count and new_books == 0 and previous_book_count > 0:
-                        logging.warning(
-                            f"Unexpected state for {site.get('url')}: "
-                            f"Count changed ({previous_book_count} -> {current_book_count}) "
-                            f"but new_books is 0"
-                        )
-                # If book_count is not being updated, preserve existing values
-                if 'book_count' not in site:
-                    if 'new_books' not in site:
-                        site['new_books'] = existing.get('new_books', 0)
-                    if 'last_book_count' not in site:
-                        site['last_book_count'] = previous_last_book_count
-            # For new records, initialize counts if not provided
-            else:
-                if 'book_count' not in site or site['book_count'] is None:
-                    site['book_count'] = 0
-                if 'last_book_count' not in site or site['last_book_count'] is None:
-                    site['last_book_count'] = 0
-                if 'new_books' not in site or site['new_books'] is None:
-                    site['new_books'] = 0
-<<<<<<< HEAD
-                # Assign demeter_id for new records
-                if 'demeter_id' not in site or site['demeter_id'] in (None, 0, ''):
-                    try:
-                        next_id = db.conn.execute("SELECT COALESCE(MAX(demeter_id), 0) + 1 FROM sites").fetchone()[0]
-                    except Exception:
-                        next_id = 1
-                    site['demeter_id'] = next_id
-=======
-            
->>>>>>> 7c57555b13f913b3ed60cd67b06d6f91cb3db19f
-            # Preserve existing country if not explicitly set in the update
-            if 'country' not in site or not site['country']:
-                site['country'] = existing.get('country', '')
-                    
-            # Preserve timestamp fields if not provided
-            timestamp_fields = ['last_failed', 'last_success']
-            for field in timestamp_fields:
-                if field not in site or not site[field]:
-                    site[field] = existing.get(field, None)
-        
-        # Perform the upsert
-        db["sites"].upsert(site, pk='uuid')
-        logging.info("Successfully saved site with UUID: %s", site['uuid'])
-        
-        # Verify the data was saved correctly
-        saved_site = db["sites"].get(site['uuid'])
-        logging.info("Retrieved saved site: %s", saved_site)
-        
-    except Exception as e:
-        logging.error("Error saving site to database: %s", str(e))
-        raise
+
+    # # TODO: Check if the site is not alreday present
+    # def save_sites(db, sites):
+    #     db["sites"].insert_all(sites, alter=True,  batch_size=100)
+    if not 'uuid' in site: 
+        site['uuid']=str(uuid.uuid4())    
+    print("Site: ",site)
+    logging.info("Site: %s", site)
+    db["sites"].upsert(site, pk='uuid')
 
 
 ##########################

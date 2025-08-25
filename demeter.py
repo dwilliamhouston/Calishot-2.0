@@ -8,6 +8,7 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import re
+import calishot_logging
 
 # --- Build Info ---
 VERSION = "1.0.0"
@@ -22,12 +23,9 @@ INDEX_DB_PATH = os.path.join(_BASE_DIR, "data", "index.db")
 
 # --- Logging Setup ---
 def setup_logging(verbose: bool):
+    """Initialize shared logging once with desired verbosity."""
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s %(levelname)s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    calishot_logging.init_logging(level)
 
 # --- Database Connections ---
 def get_sites_db_conn():
@@ -226,7 +224,7 @@ def handle_host_list_all(args):
 def handle_host_add(args):
     conn = get_sites_db_conn()
     cur = conn.cursor()
-    # Find current max demeter_id
+    # Find current max 
     cur.execute("SELECT MAX(demeter_id) FROM sites")
     row = cur.fetchone()
     next_id = (row[0] or 0) + 1

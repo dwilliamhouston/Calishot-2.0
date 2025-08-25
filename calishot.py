@@ -7,7 +7,11 @@ from pathlib import Path
 from functions import import_urls_from_file, check_calibre_list, index_site_list, get_stats, index_site_list_seq, import_urls_from_file, check_calibre_site, build_index, index_to_json, diff, calibre_by_country, book_search, output_online_db
 
 import logging
-logging.basicConfig(filename='shodantest.log', encoding='utf-8', level=logging.ERROR)
+import calishot_logging
+# Initialize shared rotating file logger pinned to project CWD
+from pathlib import Path as _Path
+# Pin to the repository root (directory of this file), matching calishot_web/app.py
+calishot_logging.init_logging(logging.INFO, log_file=_Path(__file__).resolve().parent / 'calishot.log')
 
 #####################
 # Flags for testing #
