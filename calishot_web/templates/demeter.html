@@ -41,8 +41,11 @@
       <strong>PythonDemeter</strong>
       <span class="pill" id="jobStatus">Idle</span>
     </div>
-    <nav class="muted">
+    <nav class="muted" style="display:flex; gap:10px; align-items:center;">
       <a href="/">Home</a>
+      <a href="/total-books-by-country">Total books</a>
+      <a href="/servers-by-country">Online servers</a>
+      <a href="/demeter">Demeter</a>
     </nav>
   </header>
 
@@ -130,37 +133,41 @@
 
     async function post(url, body) {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
-      if (!res.ok) { throw new Error('HTTP ' + res.status); }
-      return res.json();
+      let data = null;
+      try { data = await res.json(); } catch (e) { /* non-JSON error */ }
+      if (!res.ok) {
+        const msg = data && (data.error || data.stderr || data.output || data.traceback || JSON.stringify(data));
+        throw new Error(`HTTP ${res.status}${msg ? ' - ' + msg : ''}`);
+      }
+      return data;
     }
 
-    async function doHostList(){ const j = await post('/api/demeter/host/list'); append(j.output.trim()); }
-    async function doHostListAll(){ const j = await post('/api/demeter/host/list_all'); append(j.output.trim()); }
+    async function doHostList(){ try { const j = await post('/api/demeter/host/list'); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); } }
+    async function doHostListAll(){ try { const j = await post('/api/demeter/host/list_all'); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); } }
     async function doHostAdd(){
       const val = document.getElementById('hostAdd').value.trim(); if(!val) return;
-      const j = await post('/api/demeter/host/add', { hosturl: val }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/add', { hosturl: val }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doHostRemove(){
       const val = document.getElementById('hostId').value.trim(); if(!val) return;
-      const j = await post('/api/demeter/host/rm', { hostid: val }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/rm', { hostid: val }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doHostEnable(){
       const val = document.getElementById('hostId').value.trim(); if(!val) return;
-      const j = await post('/api/demeter/host/enable', { hostid: val }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/enable', { hostid: val }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doHostDisable(){
       const val = document.getElementById('hostId').value.trim(); if(!val) return;
-      const j = await post('/api/demeter/host/disable', { hostid: val }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/disable', { hostid: val }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doEnableCountry(){
       const cc = document.getElementById('countryCode').value.trim(); if(!cc) return;
-      const j = await post('/api/demeter/host/enable', { enable_country: cc }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/enable', { enable_country: cc }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doEnableAll(){
       const ok = confirm('Are you sure you want to enable ALL online hosts? This will activate every host.');
       if(!ok){ append('Enable All cancelled.'); return; }
-      const j = await post('/api/demeter/host/enable', { enable_all: true });
-      append(j.output.trim());
+      try { const j = await post('/api/demeter/host/enable', { enable_all: true }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
     async function doDisableAll(){ const j = await post('/api/demeter/host/disable', { disable_all: true }); append(j.output.trim()); }
 
@@ -227,7 +234,7 @@
 
     async function doHostStats(){
       const val = document.getElementById('statsId').value.trim(); if(!val) return;
-      const j = await post('/api/demeter/host/stats', { hostid: val }); append(j.output.trim());
+      try { const j = await post('/api/demeter/host/stats', { hostid: val }); append((j.output||'').trim()); } catch(e){ append('Error: ' + e.message); }
     }
   </script>
 </body>
