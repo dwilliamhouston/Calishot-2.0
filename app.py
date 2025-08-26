@@ -134,6 +134,7 @@ def get_country_counts():
             SELECT country, COUNT(*) as count 
             FROM sites 
             WHERE country IS NOT NULL AND country != ''
+              AND LOWER(TRIM(status)) = 'online'
             GROUP BY country
             ORDER BY count DESC
         ''')
@@ -167,6 +168,62 @@ def get_country_counts():
             except Exception as e:
                 logger.error(f"Error closing database connection: {str(e)}")
 
+# --------------------- Country utilities ---------------------
+def country_name_to_iso3(name: str) -> str | None:
+    """Best-effort mapping from country display name to ISO3 code.
+
+    Tries pycountry if installed; falls back to a small synonym map and returns
+    uppercase ISO3 or None if not found.
+    """
+    if not name:
+        return None
+    n = (name or '').strip()
+    if not n:
+        return None
+    iso = None
+    # Try pycountry for robust lookup
+    try:
+        import pycountry  # type: ignore
+        try:
+            c = pycountry.countries.lookup(n)
+            if hasattr(c, 'alpha_3'):
+                iso = c.alpha_3.upper()
+        except Exception:
+            pass
+    except Exception:
+        # pycountry not installed; ignore
+        pass
+    if iso:
+        return iso
+    # Fallback minimal synonyms
+    synonyms = {
+        'usa': 'USA', 'united states': 'USA', 'united states of america': 'USA', 'u.s.a.': 'USA', 'us': 'USA',
+        'uk': 'GBR', 'united kingdom': 'GBR', 'great britain': 'GBR', 'england': 'GBR',
+        'south korea': 'KOR', 'korea, republic of': 'KOR',
+        'north korea': 'PRK',
+        'russia': 'RUS', 'russian federation': 'RUS',
+        'iran': 'IRN', 'islamic republic of iran': 'IRN',
+        'czech republic': 'CZE', 'czechia': 'CZE',
+        'vietnam': 'VNM', 'viet nam': 'VNM',
+        'taiwan': 'TWN',
+        'bolivia': 'BOL',
+        'venezuela': 'VEN',
+        'moldova': 'MDA',
+        'palestine': 'PSE',
+        'syria': 'SYR',
+        'laos': 'LAO',
+        'ivory coast': 'CIV', 'cote d\'ivoire': 'CIV',
+        'congo': 'COG', 'democratic republic of the congo': 'COD',
+        'tanzania': 'TZA',
+        'myanmar': 'MMR', 'burma': 'MMR',
+        'brunei': 'BRN',
+        'republic of korea': 'KOR',
+        'kyrgyzstan': 'KGZ',
+        'slovakia': 'SVK',
+    }
+    key = n.lower()
+    return synonyms.get(key)
+
 def add_csp_header(response):
     """Add Content Security Policy headers to allow necessary resources."""
     csp_policy = (
@@ -186,7 +243,7 @@ def index():
     try:
         # Log a message when the index page is accessed
         logger.info("Rendering index page")
-        response = make_response(render_template('index_clean.html'))
+        response = make_response(render_template('total_servers_by_country.html'))
         return add_csp_header(response)
     except Exception as e:
         logger.error(f"Error rendering index: {e}")
@@ -200,6 +257,16 @@ def demeter_page():
     except Exception as e:
         logger.error(f"Error rendering demeter page: {e}")
         return "Failed to render Demeter UI", 500
+
+# New page: Active servers by country
+@app.route('/servers-by-country')
+def servers_by_country():
+    try:
+        response = make_response(render_template('servers_by_country.html'))
+        return add_csp_header(response)
+    except Exception as e:
+        logger.error(f"Error rendering servers_by_country page: {e}")
+        return "Failed to render Servers by Country page", 500
 
 # Serve static files
 @app.route('/static/<path:path>')
@@ -233,6 +300,217 @@ def api_country_counts():
         error_msg = f"Unexpected error in country_counts API: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return jsonify({"error": error_msg}), 500
+
+@app.route('/api/country_counts_iso')
+def api_country_counts_iso():
+    """Return country counts keyed by ISO3 codes for mapping libraries.
+
+    Response:
+    {
+      "counts": { "USA": 10, "GBR": 3, ... },
+      "unmapped": { "Some Name": 2, ... }  # names that couldn't be mapped
+    }
+    """
+    try:
+        base = get_country_counts()
+        if isinstance(base, dict) and 'error' in base:
+            return jsonify({"error": base['error']}), 500
+        if not base:
+            return jsonify({"error": "No country data available"}), 404
+        counts_iso: dict[str, int] = {}
+        unmapped: dict[str, int] = {}
+        for name, cnt in base.items():
+            iso = country_name_to_iso3(name)
+            if iso:
+                counts_iso[iso] = counts_iso.get(iso, 0) + int(cnt)
+            else:
+                unmapped[name] = int(cnt)
+        # Log summary for diagnostics
+        logger.info(f"ISO mapping complete: mapped={len(counts_iso)} unmapped={len(unmapped)}")
+        return jsonify({"counts": counts_iso, "unmapped": unmapped})
+    except Exception as e:
+        logger.error(f"Unexpected error in country_counts_iso API: {e}", exc_info=True)
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+# --------------------- Totals: Books by Country ---------------------
+def get_book_counts_total():
+    """Get total books (SUM(book_count)) per country (no status filter)."""
+    conn = None
+    try:
+        env_dir = os.getenv('CALISHOT_DATA_DIR')
+        repo_sites = _PROJECT_ROOT / 'data' / 'sites.db'
+        pkg_sites = repo_sites
+        cwd_sites = Path.cwd() / 'data' / 'sites.db'
+        candidates = []
+        if env_dir:
+            candidates.append(Path(env_dir) / 'sites.db')
+        candidates.append(repo_sites)
+        candidates.append(pkg_sites)
+        candidates.append(cwd_sites)
+        db_path = next((p for p in candidates if p and p.exists()), candidates[0])
+        if not db_path.exists():
+            error_msg = f"Database not found at {db_path.absolute()}"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sites';")
+        if not cursor.fetchone():
+            error_msg = "The 'sites' table does not exist in the database"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        cursor.execute('''
+            SELECT country, COALESCE(SUM(book_count), 0) AS total_books
+            FROM sites
+            WHERE country IS NOT NULL AND country != ''
+            GROUP BY country
+            ORDER BY total_books DESC
+        ''')
+        results = cursor.fetchall()
+        return {row['country']: int(row['total_books'] or 0) for row in results}
+    except sqlite3.Error as e:
+        return {"error": f"Database error: {str(e)}"}
+    except Exception as e:
+        logger.error("Unexpected error in get_book_counts_total", exc_info=True)
+        return {"error": f"Unexpected error: {str(e)}"}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+@app.route('/api/book_counts_total')
+def api_book_counts_total():
+    try:
+        counts = get_book_counts_total()
+        if isinstance(counts, dict) and 'error' in counts:
+            return jsonify({"error": counts['error']}), 500
+        if not counts:
+            return jsonify({"error": "No country data available"}), 404
+        response = jsonify(counts)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+    except Exception as e:
+        logger.error(f"Unexpected error in book_counts_total API: {e}", exc_info=True)
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+@app.route('/api/book_counts_iso_total')
+def api_book_counts_iso_total():
+    try:
+        base = get_book_counts_total()
+        if isinstance(base, dict) and 'error' in base:
+            return jsonify({"error": base['error']}), 500
+        if not base:
+            return jsonify({"error": "No country data available"}), 404
+        counts_iso: dict[str, int] = {}
+        unmapped: dict[str, int] = {}
+        for name, cnt in base.items():
+            iso = country_name_to_iso3(name)
+            if iso:
+                counts_iso[iso] = counts_iso.get(iso, 0) + int(cnt)
+            else:
+                unmapped[name] = int(cnt)
+        return jsonify({"counts": counts_iso, "unmapped": unmapped})
+    except Exception as e:
+        logger.error(f"Unexpected error in book_counts_iso_total API: {e}", exc_info=True)
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+@app.route('/total-books-by-country')
+def total_books_by_country_page():
+    try:
+        response = make_response(render_template('total_books_by_country.html'))
+        return add_csp_header(response)
+    except Exception as e:
+        logger.error(f"Error rendering total_books_by_country page: {e}")
+        return "Failed to render Total Books by Country page", 500
+
+# Total (all statuses) country counts
+def get_country_counts_total():
+    """Get total count of sites per country (no status filter)."""
+    conn = None
+    try:
+        # reuse DB resolution from get_country_counts
+        env_dir = os.getenv('CALISHOT_DATA_DIR')
+        repo_sites = _PROJECT_ROOT / 'data' / 'sites.db'
+        pkg_sites = repo_sites
+        cwd_sites = Path.cwd() / 'data' / 'sites.db'
+        candidates = []
+        if env_dir:
+            candidates.append(Path(env_dir) / 'sites.db')
+        candidates.append(repo_sites)
+        candidates.append(pkg_sites)
+        candidates.append(cwd_sites)
+        db_path = next((p for p in candidates if p and p.exists()), candidates[0])
+        if not db_path.exists():
+            error_msg = f"Database not found at {db_path.absolute()}"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sites';")
+        if not cursor.fetchone():
+            error_msg = "The 'sites' table does not exist in the database"
+            logger.error(error_msg)
+            return {"error": error_msg}
+        cursor.execute('''
+            SELECT country, COUNT(*) as count
+            FROM sites
+            WHERE country IS NOT NULL AND country != ''
+            GROUP BY country
+            ORDER BY count DESC
+        ''')
+        results = cursor.fetchall()
+        return {row['country']: row['count'] for row in results}
+    except sqlite3.Error as e:
+        return {"error": f"Database error: {str(e)}"}
+    except Exception as e:
+        logger.error("Unexpected error in get_country_counts_total", exc_info=True)
+        return {"error": f"Unexpected error: {str(e)}"}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+@app.route('/api/country_counts_total')
+def api_country_counts_total():
+    try:
+        counts = get_country_counts_total()
+        if isinstance(counts, dict) and 'error' in counts:
+            return jsonify({"error": counts['error']}), 500
+        if not counts:
+            return jsonify({"error": "No country data available"}), 404
+        response = jsonify(counts)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+    except Exception as e:
+        logger.error(f"Unexpected error in country_counts_total API: {e}", exc_info=True)
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
+
+@app.route('/api/country_counts_iso_total')
+def api_country_counts_iso_total():
+    try:
+        base = get_country_counts_total()
+        if isinstance(base, dict) and 'error' in base:
+            return jsonify({"error": base['error']}), 500
+        if not base:
+            return jsonify({"error": "No country data available"}), 404
+        counts_iso: dict[str, int] = {}
+        unmapped: dict[str, int] = {}
+        for name, cnt in base.items():
+            iso = country_name_to_iso3(name)
+            if iso:
+                counts_iso[iso] = counts_iso.get(iso, 0) + int(cnt)
+            else:
+                unmapped[name] = int(cnt)
+        return jsonify({"counts": counts_iso, "unmapped": unmapped})
+    except Exception as e:
+        logger.error(f"Unexpected error in country_counts_iso_total API: {e}", exc_info=True)
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 # --------------------- Demeter API ---------------------
 @app.post('/api/demeter/host/list')
