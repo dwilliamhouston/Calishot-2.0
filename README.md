@@ -71,7 +71,7 @@ HOST=127.0.0.1 PORT=5003 calishot-web
 
 Place your SQLite DB at one of the recognized locations:
 
-- `~/.calishot/data/sites.db` (default)
+- `~/data/sites.db` (default)
 - or set an explicit directory via `CALISHOT_DATA_DIR`:
 
 ```bash
