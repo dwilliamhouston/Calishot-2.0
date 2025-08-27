@@ -462,6 +462,11 @@ def check_calibre_site(site):
                         total_books += lib_count
                         print(f"Library '{library}': {lib_count} books")
                         logging.info(f"Library '{library}': {lib_count} books")
+                        # Update per-library tracking in sites.db
+                        try:
+                            upsert_library_count(site['url'], library, lib_count)
+                        except Exception as uple:
+                            logging.warning("Failed upserting per-library count for %s/%s: %s", site['url'], library, uple)
                         
                     except Exception as lib_e:
                         error_msg = f"Error getting book count for library '{library}': {str(lib_e)}"
@@ -472,6 +477,22 @@ def check_calibre_site(site):
                 ret['book_count'] = total_books
                 print(f"Total books across all libraries: {total_books}")
                 logging.info(f"Total books across all libraries: {total_books}")
+            else:
+                # Even for a single library, upsert its per-library count for tracking
+                for library in libraries:
+                    try:
+                        if not library:
+                            continue
+                        lib_url = f"{api}search/{library}?num=0"
+                        lib_r = requests.get(lib_url, verify=False, timeout=(timeout, 30))
+                        lib_r.raise_for_status()
+                        lib_count = int(lib_r.json().get("total_num", 0))
+                        try:
+                            upsert_library_count(site['url'], library, lib_count)
+                        except Exception as uple:
+                            logging.warning("Failed upserting per-library count for %s/%s: %s", site['url'], library, uple)
+                    except Exception as lib_e:
+                        logging.warning("Error getting book count for library '%s': %s", library, lib_e, exc_info=True)
             
             # If no libraries found, mark status as 'unknown' but keep error fields as None
             if libraries_count == 0:
@@ -809,6 +830,69 @@ def get_libs_from_site(site):
         logging.error(f"Error updating libraries count in sites database: {e}")
     
     return libraries
+
+#############################################
+# Per-library tracking helpers               #
+#############################################
+def upsert_library_count(url: str, library: str, count: int, dir=data_dir):
+    """
+    Upsert per-library counts into data/sites.db 'libraries_per_server' table.
+    Maintains book_count_per_library, last_book_count_per_library, new_books_per_library, last_updated.
+    Primary key is (url, library).
+    """
+    try:
+        db_path = Path(dir) / "sites.db"
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        # Ensure table exists (migration should create it, but be defensive)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS libraries_per_server (
+                url TEXT NOT NULL,
+                library TEXT NOT NULL,
+                book_count_per_library INTEGER DEFAULT 0,
+                last_book_count_per_library INTEGER DEFAULT 0,
+                new_books_per_library INTEGER DEFAULT 0,
+                last_updated TEXT,
+                PRIMARY KEY (url, library)
+            )
+            """
+        )
+
+        # Fetch previous count
+        cur.execute(
+            "SELECT book_count_per_library FROM libraries_per_server WHERE url = ? AND library = ?",
+            (url, library),
+        )
+        row = cur.fetchone()
+        prev = int(row[0]) if row and row[0] is not None else 0
+        current = int(count) if count is not None else 0
+        new_books = max(0, current - prev)
+        now = datetime.datetime.utcnow().isoformat()
+
+        # Upsert with conflict handling
+        cur.execute(
+            """
+            INSERT INTO libraries_per_server (
+                url, library, book_count_per_library, last_book_count_per_library, new_books_per_library, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url, library) DO UPDATE SET
+                last_book_count_per_library = excluded.last_book_count_per_library,
+                book_count_per_library = excluded.book_count_per_library,
+                new_books_per_library = excluded.new_books_per_library,
+                last_updated = excluded.last_updated
+            """,
+            (url, library, current, prev, new_books, now),
+        )
+        conn.commit()
+        logging.info("Upserted library count %s/%s: prev=%d current=%d new=%d", url, library, prev, current, new_books)
+    except Exception as e:
+        logging.error("upsert_library_count failed for %s/%s: %s", url, library, e)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 #############################################
 def create_library_records_for_servers(server_urls):
