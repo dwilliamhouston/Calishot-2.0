@@ -16,13 +16,13 @@ calishot_logging.init_logging(logging.INFO, log_file=_Path(__file__).resolve().p
 #####################
 # Flags for testing #
 #####################
-run_search_by_country = True
-run_book_search = True
-run_check_calibre_list = True
+run_search_by_country = False
+run_book_search = False
+run_check_calibre_list = False
 run_output_online_db = True
 run_index_site_list = True
 run_index_site_list_seq = False
-run_build_index_eng = Truee
+run_build_index_eng = True
 run_get_stats = True
 run_index_to_json = True
 

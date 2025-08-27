@@ -264,6 +264,13 @@ def check_calibre_site(site):
     logging.info("****Check Calibre Site Function****")
     now = str(datetime.datetime.now())
     
+    # Normalize site to a dict (sqlite_utils Row can be dict-like but not a real dict)
+    try:
+        site = dict(site) if not isinstance(site, dict) else site
+    except Exception:
+        # Fall back to an empty dict if conversion fails
+        site = {}  
+
     # Get current failed_attempts from site or default to 0
     failed_attempts = site.get('failed_attempts', 0) if isinstance(site, dict) else 0
     
@@ -299,14 +306,29 @@ def check_calibre_site(site):
         # Return None to indicate the site should be removed from any processing
         return None
 
-    print('URL = ', site['url'])
+    # Validate URL early to avoid TypeError during concatenation
+    url_value = site.get('url')
+    if not isinstance(url_value, str) or not url_value.strip():
+        error_msg = f"Invalid site url: {url_value!r}"
+        print(error_msg)
+        logging.error(error_msg)
+        ret.update({
+            'status': 'error',
+            'error': error_msg,
+            'failed_attempts': failed_attempts + 1,
+            'last_failed': now,
+            'error_message': error_msg
+        })
+        return ret
+
+    print('URL = ', url_value)
     
     # If we've had 5 or more failed attempts, we should have already deleted the site
     # This is just a safety check in case we somehow get here
     if failed_attempts >= 5:
         return None
         
-    api = site['url'] + '/ajax/'
+    api = url_value.rstrip('/') + '/ajax/'
     timeout = 15
     library = ""
     url = api + 'search' + library + '?num=0'
@@ -441,20 +463,17 @@ def check_calibre_site(site):
             print(f"Found {libraries_count} libraries at {site['url']}")
             logging.info(f"Found {libraries_count} libraries at {site['url']}")
             
-            # Initialize total book count with the main library count
-            total_books = ret.get('book_count', 0)
-            
-            # If there are multiple libraries, get the book count for each one
+            # If there are multiple libraries, compute total strictly from per-library counts
             if libraries_count > 1:
                 print(f"Calculating total books across {libraries_count} libraries...")
                 logging.info(f"Calculating total books across {libraries_count} libraries")
-                
+
+                total_books = 0
                 for library in libraries:
                     try:
-                        # Skip the main library as we already have its count
                         if not library:
                             continue
-                            
+
                         lib_url = f"{api}search/{library}?num=0"
                         lib_r = requests.get(lib_url, verify=False, timeout=(timeout, 30))
                         lib_r.raise_for_status()
@@ -467,18 +486,18 @@ def check_calibre_site(site):
                             upsert_library_count(site['url'], library, lib_count)
                         except Exception as uple:
                             logging.warning("Failed upserting per-library count for %s/%s: %s", site['url'], library, uple)
-                        
+
                     except Exception as lib_e:
                         error_msg = f"Error getting book count for library '{library}': {str(lib_e)}"
                         print(f"Warning: {error_msg}")
                         logging.warning(error_msg, exc_info=True)
-                
-                # Update the total book count in the return value
+
+                # Update the total book count in the return value from summed libraries
                 ret['book_count'] = total_books
                 print(f"Total books across all libraries: {total_books}")
                 logging.info(f"Total books across all libraries: {total_books}")
             else:
-                # Even for a single library, upsert its per-library count for tracking
+                # Single library: set book_count from that library and upsert
                 for library in libraries:
                     try:
                         if not library:
@@ -487,6 +506,7 @@ def check_calibre_site(site):
                         lib_r = requests.get(lib_url, verify=False, timeout=(timeout, 30))
                         lib_r.raise_for_status()
                         lib_count = int(lib_r.json().get("total_num", 0))
+                        ret['book_count'] = lib_count
                         try:
                             upsert_library_count(site['url'], library, lib_count)
                         except Exception as uple:
@@ -2101,7 +2121,7 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         logging.info(f"Downloading ids: offset={str(offset)} count={str(remaining_num)} from {server}")
 
         # url=server+base_url+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
-        url=api+'search'+library+'?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
+        url=api+f'search{lib_segment}?num='+str(remaining_num)+'&offset='+str(offset)+'&sort=timestamp&sort_order=desc'
 
         # print("->", url)
         try:
@@ -2119,7 +2139,7 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         print ('\r {:180.180}'.format(f'Downloading metadata from {str(offset+1)} to {str(offset+remaining_num)}/{total_num} from {server}'), end='')
         logging.info("Downloading metadata from "+str(offset+1)+" to "+str(offset+remaining_num))
         books_s=",".join(str(i) for i in r.json()['book_ids'])
-        url=api+'books'+library+'?ids='+books_s
+        url=api+f'books{lib_segment}?ids='+books_s
         # url=server+base_url+'/books?ids='+books_s
         # print("->", url)
         # print ('\r{:190.190}'.format(f'url= {url} ...'), end='')
@@ -2178,7 +2198,8 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
             book={}
             book['uuid']=r_book['uuid']
             book['id']=id
-            book['library']=lib
+            # Store normalized library identifier (without leading '/')
+            book['library']=library_id
 
             # book['title']=r_book['title']
             book['title']=unidecode.unidecode(r_book['title'])
@@ -2737,6 +2758,9 @@ def index_ebooks_from_library(site, _uuid="", library='', start=0, stop=0, dir=d
         lib_segment = f'/{lib_clean}' if lib_clean else ''
     else:
         lib_segment = ''
+
+    # Normalized library identifier to store with each book
+    library_id = lib_segment.strip('/') if lib_segment else ''
 
     # Some servers require sort params even for count queries
     url=api+f'search{lib_segment}?num=0&sort=timestamp&sort_order=desc'
