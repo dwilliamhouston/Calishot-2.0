@@ -33,9 +33,7 @@ This will:
 Run the web app:
 
 ```bash
-calishot-web
-# or set host/port
-HOST=127.0.0.1 PORT=5003 calishot-web
+python3 -m calishot-web.app
 ```
 
 Place your SQLite DB at one of the recognized locations:
