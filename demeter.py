@@ -468,7 +468,8 @@ def handle_scrape_run(args):
                     label = (link.get('label') or '')
                     href = (link.get('href') or '')
                     # Case-insensitive match on label or by file extension in href
-                    ext_ok = (extension.lower() in label.lower()) or href.lower().endswith(f".{extension.lower()}")
+                    ext_all = str(extension).strip().lower() in ('all', '*', 'any', '')
+                    ext_ok = ext_all or (extension.lower() in label.lower()) or href.lower().endswith(f".{extension.lower()}")
                     host_ok = host in href
                     if host_ok and ext_ok:
                         book_links.append((uuid, href, label))
@@ -505,7 +506,8 @@ def handle_scrape_run(args):
                     if ext and len(ext) < 8:
                         file_ext = ext.lstrip('.')
                     else:
-                        file_ext = extension
+                        # If user selected 'all', fall back to a sensible default
+                        file_ext = 'epub' if str(extension).strip().lower() in ('all', '*', 'any', '') else extension
                     
                     # Build filename strictly as bookname_author.ext
                     import re
