@@ -33,7 +33,7 @@ This will:
 Run the web app:
 
 ```bash
-python3 -m calishot-web.app
+python3 -m calishot_web.app
 ```
 
 Place your SQLite DB at one of the recognized locations:
@@ -55,7 +55,7 @@ python3 -m pip install "git+https://github.com/dwilliamhouston/Calishot-2.0.git@
 Then run:
 
 ```bash
-calishot-web
+calishot_web
 ```
 
 ### 3) Local build and install (contributors)
@@ -74,7 +74,7 @@ python3 -m pip install --force-reinstall --no-deps --no-cache-dir dist/calishot_
 Run:
 
 ```bash
-calishot-web
+calishot_web
 ```
 
 ### Data placement
@@ -116,7 +116,7 @@ If the DB is missing, the app returns a helpful error JSON from `/api/country_co
 ### Uninstall
 
 ```bash
-python3 -m pip uninstall -y calishot-web
+python3 -m pip uninstall -y calishot_web
 ```
 
 ## Usage
@@ -124,9 +124,9 @@ python3 -m pip uninstall -y calishot-web
 - Start the app after install:
 
 ```bash
-calishot-web
+calishot_web
 # or override host/port
-HOST=127.0.0.1 PORT=5003 calishot-web
+HOST=127.0.0.1 PORT=5003 calishot_web
 ```
 
 - Place your database at `~/.calishot/data/sites.db` or set `CALISHOT_DATA_DIR`.
