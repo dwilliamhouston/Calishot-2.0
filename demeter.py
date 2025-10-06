@@ -467,27 +467,52 @@ def handle_scrape_run(args):
                 # Determine if we should collect all formats
                 ext_all = str(extension).strip().lower() in ('all', '*', 'any', '')
                 if ext_all:
-                    # Collect all available formats (dedupe by file extension) for this book on this host
+                    # Collect all available formats (dedupe by a robust format key) for this book on this host
                     import os
                     from urllib.parse import urlparse
-                    seen_exts = set()
+                    def token_from_label(lbl: str) -> str | None:
+                        if not lbl:
+                            return None
+                        tokens = {
+                            'epub','epub2','epub3','pdf','mobi','azw','azw1','azw3','kf8','kfx','pdb','prc','tpz',
+                            'txt','rtf','html','m4b','mp3','aac','flac','wma','ogg','wav','cbr','cbz','cb7','cbt','cba'
+                        }
+                        low = str(lbl).lower()
+                        for t in sorted(tokens, key=len, reverse=True):
+                            if f".{t}" in low or f" {t}" in low or f"-{t}" in low or f"_{t}" in low or low.endswith(t):
+                                return t
+                        return None
+                    seen_keys = set()
+                    queued = []
+                    host_mismatch = 0
                     for link in links:
                         label = (link.get('label') or '')
                         href = (link.get('href') or '')
-                        if not href or host not in href:
+                        if not href:
                             continue
+                        # Do NOT require same host when selecting ALL; many sites serve formats via CDNs
+                        if host not in href:
+                            host_mismatch += 1
+                        # Prefer extension from href path
                         try:
                             path = urlparse(href).path
                             ext = os.path.splitext(path)[-1].lower().lstrip('.')
                         except Exception:
                             ext = ''
-                        # Dedupe by extension to avoid multiple downloads of same format
-                        key_ext = ext or ''
-                        if key_ext in seen_exts:
+                        # If no ext, try to infer from label tokens
+                        fmt = ext or token_from_label(label) or None
+                        # Build a dedupe key; if we still don't have a format token, use href itself
+                        key = (fmt or '').strip() or href
+                        if key in seen_keys:
                             continue
-                        seen_exts.add(key_ext)
+                        seen_keys.add(key)
+                        queued.append((uuid, href, label, fmt or ''))
                         book_links.append((uuid, href, label))
-                    print(f"[DEBUG] [ALL] uuid={uuid} queued {len(seen_exts)} format(s): {sorted(seen_exts)}")
+                    try:
+                        dbg = ', '.join([f"{q[3] or 'unknown'}" for q in queued])
+                        print(f"[DEBUG] [ALL] uuid={uuid} queued {len(queued)} item(s) formats=[{dbg}] keys={len(seen_keys)} host_mismatch={host_mismatch}")
+                    except Exception:
+                        print(f"[DEBUG] [ALL] uuid={uuid} queued {len(queued)} item(s)")
                 else:
                     # Specific extension requested: pick the first matching link on this host
                     wanted = str(extension).strip().lower()
@@ -554,6 +579,26 @@ def handle_scrape_run(args):
                                 return t
                         return None
 
+                    def infer_ext_from_query(h: str) -> str | None:
+                        try:
+                            from urllib.parse import urlparse, parse_qs
+                            q = parse_qs(urlparse(h).query)
+                            candidates = []
+                            for k, vals in q.items():
+                                for v in vals:
+                                    candidates.append(str(v).lower())
+                                    candidates.append(str(k).lower())
+                            known = {
+                                'epub','epub2','epub3','pdf','mobi','azw','azw1','azw3','kf8','kfx','pdb','prc','tpz',
+                                'txt','rtf','html','m4b','mp3','aac','flac','wma','ogg','wav','cbr','cbz','cb7','cbt','cba'
+                            }
+                            for t in sorted(known, key=len, reverse=True):
+                                if any(t == c or f".{t}" in c for c in candidates):
+                                    return t
+                        except Exception:
+                            pass
+                        return None
+
                     def infer_ext_from_headers(resp) -> str | None:
                         try:
                             cd = resp.headers.get('Content-Disposition') or resp.headers.get('content-disposition')
@@ -593,6 +638,7 @@ def handle_scrape_run(args):
                     # Try in order: href, label, headers, then fallback
                     file_ext = (
                         infer_ext_from_href(href)
+                        or infer_ext_from_query(href)
                         or infer_ext_from_label(label)
                         or infer_ext_from_headers(rf)
                     )
@@ -657,7 +703,17 @@ def handle_scrape_run(args):
                     # Debug: show how we derived the filename (verbose only)
                     logging.debug(f"[NAME] raw_label={str(label)} candidate={locals().get('candidate', '')} parsed_title={parsed_title} parsed_author={parsed_author} title_for_name={title_for_name} author_for_name={author_for_name} filename_core={filename_core}")
                     
-                    file_path = os.path.join(output_dir, f"{filename_core}.{file_ext}")
+                    # Ensure unique filename to avoid overwrites across multiple formats
+                    base_path = os.path.join(output_dir, f"{filename_core}.{file_ext}")
+                    file_path = base_path
+                    if os.path.exists(file_path):
+                        idx = 1
+                        while True:
+                            candidate = os.path.join(output_dir, f"{filename_core}_{idx}.{file_ext}")
+                            if not os.path.exists(candidate):
+                                file_path = candidate
+                                break
+                            idx += 1
                     print(f"[DEBUG] Saving to {file_path}")
                     with open(file_path, 'wb') as f:
                         f.write(rf.content)
