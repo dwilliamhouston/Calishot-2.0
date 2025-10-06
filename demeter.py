@@ -464,16 +464,43 @@ def handle_scrape_run(args):
         for uuid, links_json in rows:
             try:
                 links = json.loads(links_json)
-                for link in links:
-                    label = (link.get('label') or '')
-                    href = (link.get('href') or '')
-                    # Case-insensitive match on label or by file extension in href
-                    ext_all = str(extension).strip().lower() in ('all', '*', 'any', '')
-                    ext_ok = ext_all or (extension.lower() in label.lower()) or href.lower().endswith(f".{extension.lower()}")
-                    host_ok = host in href
-                    if host_ok and ext_ok:
+                # Determine if we should collect all formats
+                ext_all = str(extension).strip().lower() in ('all', '*', 'any', '')
+                if ext_all:
+                    # Collect all available formats (dedupe by file extension) for this book on this host
+                    import os
+                    from urllib.parse import urlparse
+                    seen_exts = set()
+                    for link in links:
+                        label = (link.get('label') or '')
+                        href = (link.get('href') or '')
+                        if not href or host not in href:
+                            continue
+                        try:
+                            path = urlparse(href).path
+                            ext = os.path.splitext(path)[-1].lower().lstrip('.')
+                        except Exception:
+                            ext = ''
+                        # Dedupe by extension to avoid multiple downloads of same format
+                        key_ext = ext or ''
+                        if key_ext in seen_exts:
+                            continue
+                        seen_exts.add(key_ext)
                         book_links.append((uuid, href, label))
-                        break
+                    print(f"[DEBUG] [ALL] uuid={uuid} queued {len(seen_exts)} format(s): {sorted(seen_exts)}")
+                else:
+                    # Specific extension requested: pick the first matching link on this host
+                    wanted = str(extension).strip().lower()
+                    for link in links:
+                        label = (link.get('label') or '')
+                        href = (link.get('href') or '')
+                        if not href or host not in href:
+                            continue
+                        label_ok = wanted in label.lower()
+                        href_ok = href.lower().endswith(f".{wanted}")
+                        if label_ok or href_ok:
+                            book_links.append((uuid, href, label))
+                            break
             except Exception as e:
                 print(f"[DEBUG] Could not parse links for {uuid}: {e}")
         print(f"[DEBUG] Download targets (uuid, href, label): {book_links}")
@@ -498,16 +525,82 @@ def handle_scrape_run(args):
                 print(f"[DEBUG] Downloading book {uuid} from href: {href}")
                 rf = requests.get(href, headers={"User-Agent": user_agent}, timeout=timeout)
                 if rf.status_code == 200:
-                    # Extract extension from href or default to .epub
+                    # Determine correct file extension using multiple strategies
                     import os
                     from urllib.parse import urlparse
-                    path = urlparse(href).path
-                    ext = os.path.splitext(path)[-1]
-                    if ext and len(ext) < 8:
-                        file_ext = ext.lstrip('.')
-                    else:
-                        # If user selected 'all', fall back to a sensible default
-                        file_ext = 'epub' if str(extension).strip().lower() in ('all', '*', 'any', '') else extension
+
+                    def infer_ext_from_href(h: str) -> str | None:
+                        try:
+                            p = urlparse(h).path
+                            e = os.path.splitext(p)[-1]
+                            # accept short, reasonable extensions
+                            if e and 1 <= len(e) <= 7:
+                                return e.lstrip('.').lower()
+                        except Exception:
+                            pass
+                        return None
+
+                    def infer_ext_from_label(lbl: str) -> str | None:
+                        if not lbl:
+                            return None
+                        tokens = {
+                            'epub','epub2','epub3','pdf','mobi','azw','azw1','azw3','kf8','kfx','pdb','prc','tpz',
+                            'txt','rtf','html','m4b','mp3','aac','flac','wma','ogg','wav','cbr','cbz','cb7','cbt','cba'
+                        }
+                        low = lbl.lower()
+                        # exact token match inside label
+                        for t in sorted(tokens, key=len, reverse=True):
+                            if f".{t}" in low or f" {t}" in low or f"-{t}" in low or f"_{t}" in low or low.endswith(t):
+                                return t
+                        return None
+
+                    def infer_ext_from_headers(resp) -> str | None:
+                        try:
+                            cd = resp.headers.get('Content-Disposition') or resp.headers.get('content-disposition')
+                            if cd and 'filename=' in cd:
+                                fname = cd.split('filename=', 1)[1].strip().strip('"\' ')
+                                e = os.path.splitext(fname)[-1]
+                                if e and 1 <= len(e) <= 7:
+                                    return e.lstrip('.').lower()
+                        except Exception:
+                            pass
+                        try:
+                            ctype = (resp.headers.get('Content-Type') or resp.headers.get('content-type') or '').lower()
+                            mime_map = {
+                                'application/epub+zip': 'epub',
+                                'application/pdf': 'pdf',
+                                'application/x-mobipocket-ebook': 'mobi',
+                                'application/x-mobi8-ebook': 'kf8',
+                                'application/vnd.amazon.ebook': 'azw',
+                                'application/vnd.amazon.mobi8-ebook': 'azw3',
+                                'audio/mpeg': 'mp3',
+                                'audio/mp4': 'm4b',
+                                'audio/aac': 'aac',
+                                'audio/flac': 'flac',
+                                'audio/x-ms-wma': 'wma',
+                                'audio/ogg': 'ogg',
+                                'audio/wav': 'wav',
+                                'text/plain': 'txt',
+                                'text/html': 'html',
+                            }
+                            for k, v in mime_map.items():
+                                if k in ctype:
+                                    return v
+                        except Exception:
+                            pass
+                        return None
+
+                    # Try in order: href, label, headers, then fallback
+                    file_ext = (
+                        infer_ext_from_href(href)
+                        or infer_ext_from_label(label)
+                        or infer_ext_from_headers(rf)
+                    )
+                    if not file_ext:
+                        # Fallback: if a specific extension was requested, use that; otherwise avoid mislabeling
+                        sel = str(extension).strip().lower()
+                        file_ext = sel if sel not in ('all', '*', 'any', '') else 'bin'
+                    print(f"[DEBUG] Chosen extension for {uuid}: {file_ext} (href={href}, label={label})")
                     
                     # Build filename strictly as bookname_author.ext
                     import re
